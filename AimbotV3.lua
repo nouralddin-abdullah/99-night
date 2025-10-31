@@ -240,9 +240,10 @@ local Load = function()
 	]]
 
 	ServiceConnections.RenderSteppedConnection = Connect(__index(RunService, Environment.DeveloperSettings.UpdateMode), function()
-		local OffsetToMoveDirection, LockPart = Settings.OffsetToMoveDirection, Settings.LockPart
+		pcall(function()
+			local OffsetToMoveDirection, LockPart = Settings.OffsetToMoveDirection, Settings.LockPart
 
-		if FOVSettings.Enabled and Settings.Enabled then
+			if FOVSettings.Enabled and Settings.Enabled then
 			for Index, Value in next, FOVSettings do
 				-- Skip custom settings that aren't valid Circle properties
 				if Index == "Color" or Index == "Enabled" or Index == "RainbowColor" or Index == "RainbowOutlineColor" or Index == "LockedColor" or Index == "OutlineColor" then
@@ -269,14 +270,41 @@ local Load = function()
 		if Running and Settings.Enabled then
 			GetClosestPlayer()
 
-			Offset = OffsetToMoveDirection and __index(FindFirstChildOfClass(__index(Environment.Locked, "Character"), "Humanoid"), "MoveDirection") * (mathclamp(Settings.OffsetIncrement, 1, 30) / 10) or Vector3zero
+			-- Safely calculate offset with nil checks
+			if OffsetToMoveDirection and Environment.Locked then
+				local Character = __index(Environment.Locked, "Character")
+				local Humanoid = Character and FindFirstChildOfClass(Character, "Humanoid")
+				Offset = Humanoid and __index(Humanoid, "MoveDirection") * (mathclamp(Settings.OffsetIncrement, 1, 30) / 10) or Vector3zero
+			else
+				Offset = Vector3zero
+			end
 
 			if Environment.Locked then
-				local LockedPosition_Vector3 = __index(__index(Environment.Locked, "Character")[LockPart], "Position")
+				-- Validate that the locked character and part still exist
+				local Character = __index(Environment.Locked, "Character")
+				if not Character then
+					CancelLock()
+					return
+				end
+				
+				local TargetPart = FindFirstChild(Character, LockPart)
+				if not TargetPart then
+					CancelLock()
+					return
+				end
+				
+				local LockedPosition_Vector3 = __index(TargetPart, "Position")
+				if not LockedPosition_Vector3 then
+					CancelLock()
+					return
+				end
+				
 				local LockedPosition = WorldToViewportPoint(Camera, LockedPosition_Vector3 + Offset)
 
 				if Environment.Settings.LockMode == 2 then
-					mousemoverel((LockedPosition.X - GetMouseLocation(UserInputService).X) / Settings.Sensitivity2, (LockedPosition.Y - GetMouseLocation(UserInputService).Y) / Settings.Sensitivity2)
+					if mousemoverel then
+						mousemoverel((LockedPosition.X - GetMouseLocation(UserInputService).X) / Settings.Sensitivity2, (LockedPosition.Y - GetMouseLocation(UserInputService).Y) / Settings.Sensitivity2)
+					end
 				else
 					if Settings.Sensitivity > 0 then
 						Animation = TweenService:Create(Camera, TweenInfonew(Environment.Settings.Sensitivity, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), {CFrame = CFramenew(Camera.CFrame.Position, LockedPosition_Vector3)})
@@ -291,6 +319,7 @@ local Load = function()
 				setrenderproperty(FOVCircle, "Color", FOVSettings.LockedColor)
 			end
 		end
+		end)
 	end)
 
 	ServiceConnections.InputBeganConnection = Connect(__index(UserInputService, "InputBegan"), function(Input)
