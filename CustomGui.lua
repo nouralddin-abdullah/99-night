@@ -1112,7 +1112,7 @@ function CustomGUI:_CreateTextBox(config, tab)
     Input.TextColor3 = Config.TextColor
     Input.TextSize = 13
     Input.Font = Config.MainFont
-    Input.ClearButtonMode = Enum.ClearButtonMode.WhileEditing
+    -- ClearButtonMode REMOVED - causes issues in some executors
     Input.Parent = TextBoxFrame
     CreateCorner(Input, UDim.new(0, 5))
     CreatePadding(Input, 8)
@@ -1220,3 +1220,5 @@ function CustomGUI:GetFlag(flag)
 end
 
 return CustomGUI
+
+
