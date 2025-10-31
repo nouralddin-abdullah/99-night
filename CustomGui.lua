@@ -215,6 +215,20 @@ function CustomGUI.new(config)
     self.TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
     self.TitleLabel.Parent = self.Header
     
+    -- Minimize Button
+    self.MinimizeButton = Instance.new("TextButton")
+    self.MinimizeButton.Name = "MinimizeButton"
+    self.MinimizeButton.Size = UDim2.new(0, 40, 0, 40)
+    self.MinimizeButton.Position = UDim2.new(1, -90, 0, 5)
+    self.MinimizeButton.BackgroundColor3 = Config.AccentColor
+    self.MinimizeButton.BorderSizePixel = 0
+    self.MinimizeButton.Text = "─"
+    self.MinimizeButton.TextColor3 = Config.TextColor
+    self.MinimizeButton.TextSize = 18
+    self.MinimizeButton.Font = Config.TitleFont
+    self.MinimizeButton.Parent = self.Header
+    CreateCorner(self.MinimizeButton, UDim.new(0, 6))
+    
     -- Close Button
     self.CloseButton = Instance.new("TextButton")
     self.CloseButton.Name = "CloseButton"
@@ -239,6 +253,71 @@ function CustomGUI.new(config)
     
     self.CloseButton.MouseLeave:Connect(function()
         Tween(self.CloseButton, {BackgroundColor3 = Config.ErrorColor})
+    end)
+    
+    self.MinimizeButton.MouseEnter:Connect(function()
+        Tween(self.MinimizeButton, {BackgroundColor3 = Color3.fromRGB(70, 80, 200)})
+    end)
+    
+    self.MinimizeButton.MouseLeave:Connect(function()
+        Tween(self.MinimizeButton, {BackgroundColor3 = Config.AccentColor})
+    end)
+    
+    -- Minimize Circle (Hidden by default)
+    self.MinimizeCircle = Instance.new("Frame")
+    self.MinimizeCircle.Name = "MinimizeCircle"
+    self.MinimizeCircle.Size = UDim2.new(0, 60, 0, 60)
+    self.MinimizeCircle.Position = UDim2.new(1, -80, 0, 20)
+    self.MinimizeCircle.BackgroundColor3 = Config.AccentColor
+    self.MinimizeCircle.BorderSizePixel = 0
+    self.MinimizeCircle.Visible = false
+    self.MinimizeCircle.Parent = self.ScreenGui
+    CreateCorner(self.MinimizeCircle, UDim.new(1, 0)) -- Full circle
+    CreateStroke(self.MinimizeCircle, Config.BorderColor, 2)
+    
+    local CircleButton = Instance.new("TextButton")
+    CircleButton.Size = UDim2.new(1, 0, 1, 0)
+    CircleButton.BackgroundTransparency = 1
+    CircleButton.Text = "+"
+    CircleButton.TextColor3 = Config.TextColor
+    CircleButton.TextSize = 24
+    CircleButton.Font = Config.TitleFont
+    CircleButton.Parent = self.MinimizeCircle
+    
+    -- Circle shadow
+    local circleShadow = Instance.new("ImageLabel")
+    circleShadow.Name = "Shadow"
+    circleShadow.Size = UDim2.new(1, 20, 1, 20)
+    circleShadow.Position = UDim2.new(0, -10, 0, -10)
+    circleShadow.BackgroundTransparency = 1
+    circleShadow.Image = "rbxassetid://6015897843"
+    circleShadow.ImageColor3 = Color3.fromRGB(0, 0, 0)
+    circleShadow.ImageTransparency = 0.7
+    circleShadow.ScaleType = Enum.ScaleType.Slice
+    circleShadow.SliceCenter = Rect.new(100, 100, 100, 100)
+    circleShadow.ZIndex = 0
+    circleShadow.Parent = self.MinimizeCircle
+    
+    -- Make circle draggable
+    MakeDraggable(self.MinimizeCircle, CircleButton)
+    
+    -- Minimize/Restore functionality
+    self.MinimizeButton.MouseButton1Click:Connect(function()
+        self.MainWindow.Visible = false
+        self.MinimizeCircle.Visible = true
+    end)
+    
+    CircleButton.MouseButton1Click:Connect(function()
+        self.MinimizeCircle.Visible = false
+        self.MainWindow.Visible = true
+    end)
+    
+    CircleButton.MouseEnter:Connect(function()
+        Tween(self.MinimizeCircle, {BackgroundColor3 = Color3.fromRGB(70, 80, 200)})
+    end)
+    
+    CircleButton.MouseLeave:Connect(function()
+        Tween(self.MinimizeCircle, {BackgroundColor3 = Config.AccentColor})
     end)
     
     -- Tab Container
