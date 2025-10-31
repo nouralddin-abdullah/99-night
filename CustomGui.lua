@@ -720,12 +720,21 @@ function CustomGUI:_CreateSlider(config, tab)
     
     local function UpdateSlider(input)
         local pos = math.clamp((input.Position.X - SliderTrack.AbsolutePosition.X) / SliderTrack.AbsoluteSize.X, 0, 1)
-        local value = math.floor(Slider.Min + (Slider.Max - Slider.Min) * pos)
+        local value = Slider.Min + (Slider.Max - Slider.Min) * pos
+        
+        -- Round to nearest increment (supports decimals)
         value = math.floor(value / Slider.Increment + 0.5) * Slider.Increment
         value = math.clamp(value, Slider.Min, Slider.Max)
         
+        -- Round to appropriate decimal places based on increment
+        local decimalPlaces = 0
+        if Slider.Increment < 1 then
+            decimalPlaces = math.max(0, math.ceil(-math.log10(Slider.Increment)))
+        end
+        value = math.floor(value * (10 ^ decimalPlaces) + 0.5) / (10 ^ decimalPlaces)
+        
         Slider.CurrentValue = value
-        ValueLabel.Text = tostring(value)
+        ValueLabel.Text = string.format("%." .. decimalPlaces .. "f", value)
         
         local fillSize = (value - Slider.Min) / (Slider.Max - Slider.Min)
         SliderFill.Size = UDim2.new(fillSize, 0, 1, 0)
@@ -766,6 +775,12 @@ function CustomGUI:_CreateSlider(config, tab)
     end)
     
     -- Initialize
+    local decimalPlaces = 0
+    if Slider.Increment < 1 then
+        decimalPlaces = math.max(0, math.ceil(-math.log10(Slider.Increment)))
+    end
+    ValueLabel.Text = string.format("%." .. decimalPlaces .. "f", Slider.CurrentValue)
+    
     local initialFill = (Slider.CurrentValue - Slider.Min) / (Slider.Max - Slider.Min)
     SliderFill.Size = UDim2.new(initialFill, 0, 1, 0)
     SliderButton.Position = UDim2.new(initialFill, -6, 0.5, -6)
@@ -773,8 +788,16 @@ function CustomGUI:_CreateSlider(config, tab)
     -- Add Set method
     Slider.Set = function(self, value)
         value = math.clamp(value, Slider.Min, Slider.Max)
+        
+        -- Round to appropriate decimal places based on increment
+        local decimalPlaces = 0
+        if Slider.Increment < 1 then
+            decimalPlaces = math.max(0, math.ceil(-math.log10(Slider.Increment)))
+        end
+        value = math.floor(value * (10 ^ decimalPlaces) + 0.5) / (10 ^ decimalPlaces)
+        
         Slider.CurrentValue = value
-        ValueLabel.Text = tostring(value)
+        ValueLabel.Text = string.format("%." .. decimalPlaces .. "f", value)
         
         local fillSize = (value - Slider.Min) / (Slider.Max - Slider.Min)
         SliderFill.Size = UDim2.new(fillSize, 0, 1, 0)
