@@ -9,7 +9,16 @@
 
 local game, workspace = game, workspace
 local getrawmetatable, getmetatable, setmetatable, pcall, getgenv, next, tick = getrawmetatable, getmetatable, setmetatable, pcall, getgenv, next, tick
-local Vector2new, Vector3zero, CFramenew, Color3fromRGB, Color3fromHSV, Drawingnew, TweenInfonew = Vector2.new, Vector3.zero, CFrame.new, Color3.fromRGB, Color3.fromHSV, Drawing.new, TweenInfo.new
+
+-- Safe Drawing API
+local Drawingnew = Drawing and Drawing.new or function() 
+    return setmetatable({}, {
+        __index = function() return function() end end,
+        __newindex = function() end
+    })
+end
+
+local Vector2new, Vector3zero, CFramenew, Color3fromRGB, Color3fromHSV, TweenInfonew = Vector2.new, Vector3.zero, CFrame.new, Color3.fromRGB, Color3.fromHSV, TweenInfo.new
 local getupvalue, mousemoverel, tablefind, tableremove, stringlower, stringsub, mathclamp = debug.getupvalue, mousemoverel or (Input and Input.MouseMove), table.find, table.remove, string.lower, string.sub, math.clamp
 
 local GameMetatable = getrawmetatable and getrawmetatable(game) or {
