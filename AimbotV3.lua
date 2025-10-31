@@ -244,7 +244,8 @@ local Load = function()
 
 		if FOVSettings.Enabled and Settings.Enabled then
 			for Index, Value in next, FOVSettings do
-				if Index == "Color" then
+				-- Skip custom settings that aren't valid Circle properties
+				if Index == "Color" or Index == "Enabled" or Index == "RainbowColor" or Index == "RainbowOutlineColor" or Index == "LockedColor" or Index == "OutlineColor" then
 					continue
 				end
 
