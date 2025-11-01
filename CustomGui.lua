@@ -51,19 +51,19 @@ local ScreenInfo = GetScreenInfo()
 -- Responsive sizing based on device
 local function GetResponsiveConfig()
     if ScreenInfo.IsMobile then
-        -- Mobile: Smaller, more compact
+        -- Mobile: Much smaller and compact for phones
         return {
-            WindowWidth = math.min(ScreenInfo.Width * 0.95, 380),
-            WindowHeight = math.min(ScreenInfo.Height * 0.65, 420),
-            TabContainerWidth = 100,
-            HeaderHeight = 40,
-            ButtonHeight = 30,
-            ToggleHeight = 30,
-            SliderHeight = 38,
-            DropdownHeight = 30,
-            MinimizeCircleSize = 50,
-            FontSizeTitle = 15,
-            FontSizeNormal = 12,
+            WindowWidth = math.min(ScreenInfo.Width * 0.92, 360),
+            WindowHeight = math.min(ScreenInfo.Height * 0.50, 350),
+            TabContainerWidth = 85,
+            HeaderHeight = 35,
+            ButtonHeight = 28,
+            ToggleHeight = 28,
+            SliderHeight = 35,
+            DropdownHeight = 28,
+            MinimizeCircleSize = 45,
+            FontSizeTitle = 14,
+            FontSizeNormal = 11,
         }
     elseif ScreenInfo.IsTablet then
         -- Tablet: Medium size
