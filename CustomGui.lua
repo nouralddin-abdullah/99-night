@@ -802,10 +802,6 @@ function CustomGUI:_CreateSlider(config, tab)
         local fillSize = (value - Slider.Min) / (Slider.Max - Slider.Min)
         SliderFill.Size = UDim2.new(fillSize, 0, 1, 0)
         SliderButton.Position = UDim2.new(fillSize, -6, 0.5, -6)
-        
-        if Slider.Flag then
-            self.Flags[Slider.Flag] = value
-        end
     end
     
     return Slider
@@ -1151,10 +1147,6 @@ function CustomGUI:_CreateDropdown(config, tab)
             if exists then
                 Dropdown.CurrentValue = value
                 UpdateDisplay()
-                
-                if Dropdown.Flag then
-                    self.Flags[Dropdown.Flag] = value
-                end
             end
         end
     end
@@ -1278,10 +1270,6 @@ function CustomGUI:_CreateTextBox(config, tab)
     -- Add Set method to update text programmatically
     TextBox.Set = function(self, text)
         Input.Text = text
-        
-        if TextBox.Flag then
-            self.Flags[TextBox.Flag] = text
-        end
     end
     
     return TextBox
@@ -1361,10 +1349,6 @@ function CustomGUI:_CreateColorPicker(config, tab)
     ColorPicker.Set = function(self, color)
         ColorPicker.CurrentColor = color
         ColorDisplay.BackgroundColor3 = color
-        
-        if ColorPicker.Flag then
-            self.Flags[ColorPicker.Flag] = color
-        end
     end
     
     return ColorPicker
@@ -1387,5 +1371,3 @@ function CustomGUI:GetFlag(flag)
 end
 
 return CustomGUI
-
-
