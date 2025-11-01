@@ -32,23 +32,44 @@ local function GetScreenInfo()
     local screenWidth = ViewportSize.X
     local screenHeight = ViewportSize.Y
     
-    -- Check if running on mobile via UserInputService
+    -- Multiple detection methods for mobile
     local UserInputService = game:GetService("UserInputService")
+    local GuiService = game:GetService("GuiService")
+    
+    -- Method 1: Check UserInputService
     local touchEnabled = UserInputService.TouchEnabled
     local mouseEnabled = UserInputService.MouseEnabled
     local keyboardEnabled = UserInputService.KeyboardEnabled
+    local gamepadEnabled = UserInputService.GamepadEnabled
     
-    -- Mobile detection: Touch enabled AND (no keyboard OR no mouse) OR small screen
-    local isMobile = (touchEnabled and (not keyboardEnabled or not mouseEnabled)) or screenWidth < 600 or screenHeight < 600
-    local isTablet = not isMobile and (screenWidth >= 600 and screenWidth < 1024)
+    -- Method 2: Check GuiService (more reliable for mobile)
+    local isTenFootInterface = GuiService:IsTenFootInterface() -- Console detection
+    
+    -- Method 3: Check screen orientation and aspect ratio
+    local aspectRatio = screenWidth / screenHeight
+    local isPortrait = screenHeight > screenWidth
+    local hasPhoneAspect = (aspectRatio > 0.4 and aspectRatio < 0.7) or (aspectRatio > 1.4 and aspectRatio < 2.5)
+    
+    -- Method 4: Very aggressive screen size check for phones
+    local isSmallScreen = screenWidth <= 800 or screenHeight <= 800
+    
+    -- Mobile detection: Prioritize screen size, then touch without mouse
+    local isMobile = isSmallScreen or 
+                     (touchEnabled and not mouseEnabled) or 
+                     (touchEnabled and not keyboardEnabled and not gamepadEnabled) or
+                     (isPortrait and hasPhoneAspect)
+    
+    local isTablet = not isMobile and (screenWidth >= 800 and screenWidth < 1200) and touchEnabled
     local isDesktop = not isMobile and not isTablet
     
     -- Debug info
-    print("=== GUI Screen Detection ===")
+    print("=== GUI Screen Detection (Enhanced) ===")
     print("Screen Size:", screenWidth, "x", screenHeight)
-    print("Touch:", touchEnabled, "Mouse:", mouseEnabled, "Keyboard:", keyboardEnabled)
+    print("Aspect Ratio:", string.format("%.2f", aspectRatio), "Portrait:", isPortrait)
+    print("Touch:", touchEnabled, "Mouse:", mouseEnabled, "Keyboard:", keyboardEnabled, "Gamepad:", gamepadEnabled)
+    print("Is Ten Foot:", isTenFootInterface, "Small Screen:", isSmallScreen)
     print("Device Type:", isMobile and "MOBILE" or (isTablet and "TABLET" or "DESKTOP"))
-    print("===========================")
+    print("======================================")
     
     return {
         Width = screenWidth,
