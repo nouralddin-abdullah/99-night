@@ -23,50 +23,45 @@ CustomGUI.__index = CustomGUI
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
+local GuiService = game:GetService("GuiService")
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 
--- Detect screen size and device type (Based on Rayfield's proven method)
 local function GetScreenInfo()
-    local ViewportSize = workspace.Camera.ViewportSize
-    local screenWidth = ViewportSize.X
-    local screenHeight = ViewportSize.Y
-    
-    -- Rayfield's approach: Simple screen size threshold (proven and reliable)
+    local currentCamera = workspace.CurrentCamera
+    if not currentCamera then
+        currentCamera = workspace:FindFirstChildOfClass("Camera")
+    end
+
+    local viewportSize = currentCamera and currentCamera.ViewportSize or Vector2.new(1920, 1080)
+    local screenWidth = viewportSize.X
+    local screenHeight = viewportSize.Y
+
     local minSize = Vector2.new(1024, 768)
-    local useMobileSizing = false
-    
-    -- Primary mobile detection: Screen size comparison
-    if screenWidth < minSize.X and screenHeight < minSize.Y then
+    local useMobileSizing = screenWidth < minSize.X and screenHeight < minSize.Y
+
+    local useMobilePrompt = UserInputService.TouchEnabled
+    if useMobilePrompt then
         useMobileSizing = true
     end
-    
-    -- Secondary check: Touch capability (Rayfield's method)
-    local UserInputService = game:GetService("UserInputService")
-    local useMobilePrompt = false
-    if UserInputService.TouchEnabled then
-        useMobilePrompt = true
-        useMobileSizing = true  -- If touch is enabled, it's definitely mobile
-    end
-    
+
     local isMobile = useMobileSizing
     local isTablet = not isMobile and (screenWidth >= 768 and screenWidth < 1024)
     local isDesktop = not isMobile and not isTablet
-    
-    -- Debug info
-    print("=== GUI Screen Detection (Rayfield Method) ===")
-    print("Screen Size:", screenWidth, "x", screenHeight)
-    print("Touch Enabled:", UserInputService.TouchEnabled)
-    print("Mobile Sizing:", useMobileSizing)
-    print("Device Type:", isMobile and "MOBILE" or (isTablet and "TABLET" or "DESKTOP"))
-    print("=============================================")
-    
+
     return {
         Width = screenWidth,
         Height = screenHeight,
         IsMobile = isMobile,
         IsTablet = isTablet,
-        IsDesktop = isDesktop
+        IsDesktop = isDesktop,
+        UseMobilePrompt = useMobilePrompt,
+        DragOffsetDesktop = 255,
+        DragOffsetMobile = 150,
+        DesktopWindowHeight = 475,
+        MobileWindowHeight = 275,
+        TabletWindowHeight = 425,
+        WindowWidth = 500,
     }
 end
 
@@ -75,46 +70,55 @@ local ScreenInfo = GetScreenInfo()
 -- Responsive sizing based on device
 local function GetResponsiveConfig()
     if ScreenInfo.IsMobile then
-        -- Mobile: Much smaller and compact for phones
+        local windowWidth = ScreenInfo.WindowWidth
+        local windowHeight = ScreenInfo.MobileWindowHeight
+
         return {
-            WindowWidth = math.min(ScreenInfo.Width * 0.92, 360),
-            WindowHeight = math.min(ScreenInfo.Height * 0.30, 280),
-            TabContainerWidth = 85,
-            HeaderHeight = 35,
-            ButtonHeight = 28,
-            ToggleHeight = 28,
-            SliderHeight = 35,
-            DropdownHeight = 28,
-            MinimizeCircleSize = 45,
-            FontSizeTitle = 14,
-            FontSizeNormal = 11,
+            WindowWidth = windowWidth,
+            WindowHeight = windowHeight,
+            WindowSize = UDim2.new(0, windowWidth, 0, windowHeight),
+            TabContainerWidth = 110,
+            HeaderHeight = 45,
+            ButtonHeight = 32,
+            ToggleHeight = 32,
+            SliderHeight = 40,
+            DropdownHeight = 32,
+            MinimizeCircleSize = 52,
+            FontSizeTitle = 18,
+            FontSizeNormal = 13,
         }
     elseif ScreenInfo.IsTablet then
-        -- Tablet: Medium size
+        local windowWidth = ScreenInfo.WindowWidth
+        local windowHeight = ScreenInfo.TabletWindowHeight
+
         return {
-            WindowWidth = math.min(ScreenInfo.Width * 0.75, 480),
-            WindowHeight = math.min(ScreenInfo.Height * 0.80, 550),
-            TabContainerWidth = 120,
-            HeaderHeight = 48,
+            WindowWidth = windowWidth,
+            WindowHeight = windowHeight,
+            WindowSize = UDim2.new(0, windowWidth, 0, windowHeight),
+            TabContainerWidth = 130,
+            HeaderHeight = 45,
             ButtonHeight = 34,
             ToggleHeight = 34,
-            SliderHeight = 43,
+            SliderHeight = 42,
             DropdownHeight = 34,
-            MinimizeCircleSize = 55,
-            FontSizeTitle = 18,
+            MinimizeCircleSize = 56,
+            FontSizeTitle = 19,
             FontSizeNormal = 14,
         }
     else
-        -- Desktop: Full size
+        local windowWidth = ScreenInfo.WindowWidth
+        local windowHeight = ScreenInfo.DesktopWindowHeight
+
         return {
-            WindowWidth = 550,
-            WindowHeight = 600,
-            TabContainerWidth = 140,
-            HeaderHeight = 50,
-            ButtonHeight = 35,
-            ToggleHeight = 35,
-            SliderHeight = 45,
-            DropdownHeight = 35,
+            WindowWidth = windowWidth,
+            WindowHeight = windowHeight,
+            WindowSize = UDim2.new(0, windowWidth, 0, windowHeight),
+            TabContainerWidth = 145,
+            HeaderHeight = 45,
+            ButtonHeight = 36,
+            ToggleHeight = 36,
+            SliderHeight = 44,
+            DropdownHeight = 36,
             MinimizeCircleSize = 60,
             FontSizeTitle = 20,
             FontSizeNormal = 14,
@@ -137,7 +141,7 @@ local Config = {
     ErrorColor = Color3.fromRGB(240, 71, 71),
     
     -- Responsive Sizes
-    WindowSize = UDim2.new(0, ResponsiveConfig.WindowWidth, 0, ResponsiveConfig.WindowHeight),
+    WindowSize = ResponsiveConfig.WindowSize,
     TabContainerWidth = ResponsiveConfig.TabContainerWidth,
     HeaderHeight = ResponsiveConfig.HeaderHeight,
     ButtonHeight = ResponsiveConfig.ButtonHeight,
@@ -208,56 +212,100 @@ local function Tween(object, properties, duration)
     return tween
 end
 
-local function MakeDraggable(frame, dragHandle)
+local function MakeDraggable(object, dragHandle, options)
+    options = options or {}
+
     local dragging = false
-    local dragInput
-    local dragStart
-    local startPos
-    
-    -- Rayfield's smooth dragging with device-specific tweening
-    local function update(input)
-        local delta = input.Position - dragStart
-        -- Rayfield uses exponential easing for smooth dragging on mobile
-        local tweenDuration = ScreenInfo.IsMobile and 0.4 or 0.1
-        local easingStyle = ScreenInfo.IsMobile and Enum.EasingStyle.Exponential or Enum.EasingStyle.Quad
-        
-        local tweenInfo = TweenInfo.new(tweenDuration, easingStyle, Enum.EasingDirection.Out)
-        local tween = TweenService:Create(frame, tweenInfo, {
-            Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-        })
-        tween:Play()
+    local relative
+
+    local allowDrag = options.isDragAllowed or function()
+        return true
     end
-    
-    dragHandle.InputBegan:Connect(function(input)
+
+    local onDragStep = options.onDragStep
+    local onDragStart = options.onDragStart
+    local onDragEnd = options.onDragEnd
+
+    local topLeftInset = Vector2.zero
+    if GuiService and GuiService.GetGuiInset then
+        local success, insetTopLeft = pcall(function()
+            local topLeft = select(1, GuiService:GetGuiInset())
+            if typeof(topLeft) == "Vector2" then
+                return topLeft
+            end
+
+            return Vector2.zero
+        end)
+
+        if success and typeof(insetTopLeft) == "Vector2" then
+            topLeftInset = insetTopLeft
+        end
+    end
+
+    local offset = Vector2.zero
+    local screenGui = object:FindFirstAncestorWhichIsA("ScreenGui")
+    if screenGui and screenGui.IgnoreGuiInset then
+        offset += topLeftInset
+    end
+
+    local connections = {}
+
+    connections.inputBegan = dragHandle.InputBegan:Connect(function(input, processed)
+        if processed then
+            return
+        end
+
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             dragging = true
-            dragStart = input.Position
-            startPos = frame.Position
-            
-            input.Changed:Connect(function()
-                if input.UserInputState == Enum.UserInputState.End then
-                    dragging = false
-                end
-            end)
+            relative = object.AbsolutePosition + object.AbsoluteSize * object.AnchorPoint - UserInputService:GetMouseLocation()
+
+            if onDragStart then
+                onDragStart()
+            end
         end
     end)
-    
-    dragHandle.InputChanged:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-            dragInput = input
+
+    connections.inputEnded = UserInputService.InputEnded:Connect(function(input)
+        if not dragging then
+            return
         end
-    end)
-    
-    -- Rayfield also handles InputEnded for touch devices
-    UserInputService.InputEnded:Connect(function(input)
+
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             dragging = false
+
+            if onDragEnd then
+                onDragEnd()
+            end
         end
     end)
-    
-    UserInputService.InputChanged:Connect(function(input)
-        if input == dragInput and dragging then
-            update(input)
+
+    connections.renderStepped = RunService.RenderStepped:Connect(function()
+        if not dragging or not allowDrag() then
+            return
+        end
+
+        local mousePosition = UserInputService:GetMouseLocation()
+        local targetPosition = mousePosition + relative + offset
+        local newPosition = UDim2.fromOffset(targetPosition.X, targetPosition.Y)
+
+        if ScreenInfo.IsMobile then
+            TweenService:Create(object, TweenInfo.new(0.4, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out), {
+                Position = newPosition
+            }):Play()
+        else
+            object.Position = newPosition
+        end
+
+        if onDragStep then
+            onDragStep(targetPosition)
+        end
+    end)
+
+    object.Destroying:Connect(function()
+        for _, connection in pairs(connections) do
+            if connection and connection.Disconnect then
+                connection:Disconnect()
+            end
         end
     end)
 end
@@ -406,7 +454,7 @@ function CustomGUI.new(config)
     CreateStroke(self.MinimizeCircle, Config.BorderColor, 2)
     
     -- Mobile-specific prompt text (like Rayfield's MPrompt)
-    if ScreenInfo.IsMobile then
+    if ScreenInfo.UseMobilePrompt then
         local PromptLabel = Instance.new("TextLabel")
         PromptLabel.Name = "PromptLabel"
         PromptLabel.Size = UDim2.new(1, 0, 1, 0)
@@ -442,7 +490,11 @@ function CustomGUI.new(config)
     circleShadow.Parent = self.MinimizeCircle
     
     -- Make circle draggable
-    MakeDraggable(self.MinimizeCircle, CircleButton)
+    MakeDraggable(self.MinimizeCircle, CircleButton, {
+        isDragAllowed = function()
+            return self.MinimizeCircle.Visible
+        end
+    })
     
     -- Minimize/Restore functionality
     self.MinimizeButton.MouseButton1Click:Connect(function()
@@ -494,9 +546,6 @@ function CustomGUI.new(config)
     contentLayout.Padding = UDim.new(0, 8)
     contentLayout.Parent = self.ContentContainer
     CreatePadding(self.ContentContainer, 5)
-    
-    -- Make window draggable
-    MakeDraggable(self.MainWindow, self.Header)
     
     -- Drag Bar at bottom (like Rayfield)
     local DragBar = Instance.new("Frame")
@@ -570,17 +619,35 @@ function CustomGUI.new(config)
     end)
     
     -- Update drag bar position with main window
-    local function UpdateDragBarPosition()
-        local yOffset = ScreenInfo.IsMobile and 8 or 12
-        -- Center the drag bar under the window
-        local windowCenterX = self.MainWindow.AbsolutePosition.X + (self.MainWindow.AbsoluteSize.X / 2)
-        local windowBottomY = self.MainWindow.AbsolutePosition.Y + self.MainWindow.AbsoluteSize.Y + yOffset
-        
+    local function UpdateDragBarPosition(basePosition)
+        if not DragBar then
+            return
+        end
+
+        local spacing = ScreenInfo.IsMobile and 8 or 12
+        local baseX = basePosition and basePosition.X or self.MainWindow.AbsolutePosition.X
+        local baseY = basePosition and basePosition.Y or self.MainWindow.AbsolutePosition.Y
+        local windowCenterX = baseX + (self.MainWindow.AbsoluteSize.X / 2)
+        local windowBottomY = baseY + self.MainWindow.AbsoluteSize.Y + spacing
+
         DragBar.Position = UDim2.fromOffset(windowCenterX, windowBottomY)
     end
-    
+
+    -- Make window draggable from the header
+    MakeDraggable(self.MainWindow, self.Header, {
+        isDragAllowed = function()
+            return self.MainWindow.Visible
+        end,
+        onDragStep = UpdateDragBarPosition
+    })
+
     -- Make window draggable from the bottom drag bar
-    MakeDraggable(self.MainWindow, DragInteract)
+    MakeDraggable(self.MainWindow, DragInteract, {
+        isDragAllowed = function()
+            return self.MainWindow.Visible
+        end,
+        onDragStep = UpdateDragBarPosition
+    })
     
     -- Update drag bar position when window moves
     self.MainWindow:GetPropertyChangedSignal("Position"):Connect(UpdateDragBarPosition)
