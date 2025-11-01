@@ -26,50 +26,40 @@ local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 
--- Detect screen size and device type
+-- Detect screen size and device type (Based on Rayfield's proven method)
 local function GetScreenInfo()
     local ViewportSize = workspace.Camera.ViewportSize
     local screenWidth = ViewportSize.X
     local screenHeight = ViewportSize.Y
     
-    -- Multiple detection methods for mobile
+    -- Rayfield's approach: Simple screen size threshold (proven and reliable)
+    local minSize = Vector2.new(1024, 768)
+    local useMobileSizing = false
+    
+    -- Primary mobile detection: Screen size comparison
+    if screenWidth < minSize.X and screenHeight < minSize.Y then
+        useMobileSizing = true
+    end
+    
+    -- Secondary check: Touch capability (Rayfield's method)
     local UserInputService = game:GetService("UserInputService")
-    local GuiService = game:GetService("GuiService")
+    local useMobilePrompt = false
+    if UserInputService.TouchEnabled then
+        useMobilePrompt = true
+        useMobileSizing = true  -- If touch is enabled, it's definitely mobile
+    end
     
-    -- Method 1: Check UserInputService
-    local touchEnabled = UserInputService.TouchEnabled
-    local mouseEnabled = UserInputService.MouseEnabled
-    local keyboardEnabled = UserInputService.KeyboardEnabled
-    local gamepadEnabled = UserInputService.GamepadEnabled
-    
-    -- Method 2: Check GuiService (more reliable for mobile)
-    local isTenFootInterface = GuiService:IsTenFootInterface() -- Console detection
-    
-    -- Method 3: Check screen orientation and aspect ratio
-    local aspectRatio = screenWidth / screenHeight
-    local isPortrait = screenHeight > screenWidth
-    local hasPhoneAspect = (aspectRatio > 0.4 and aspectRatio < 0.7) or (aspectRatio > 1.4 and aspectRatio < 2.5)
-    
-    -- Method 4: Very aggressive screen size check for phones
-    local isSmallScreen = screenWidth <= 800 or screenHeight <= 800
-    
-    -- Mobile detection: Prioritize screen size, then touch without mouse
-    local isMobile = isSmallScreen or 
-                     (touchEnabled and not mouseEnabled) or 
-                     (touchEnabled and not keyboardEnabled and not gamepadEnabled) or
-                     (isPortrait and hasPhoneAspect)
-    
-    local isTablet = not isMobile and (screenWidth >= 800 and screenWidth < 1200) and touchEnabled
+    local isMobile = useMobileSizing
+    local isTablet = not isMobile and (screenWidth >= 768 and screenWidth < 1024)
     local isDesktop = not isMobile and not isTablet
     
     -- Debug info
-    print("=== GUI Screen Detection (Enhanced) ===")
+    print("=== GUI Screen Detection (Rayfield Method) ===")
     print("Screen Size:", screenWidth, "x", screenHeight)
-    print("Aspect Ratio:", string.format("%.2f", aspectRatio), "Portrait:", isPortrait)
-    print("Touch:", touchEnabled, "Mouse:", mouseEnabled, "Keyboard:", keyboardEnabled, "Gamepad:", gamepadEnabled)
-    print("Is Ten Foot:", isTenFootInterface, "Small Screen:", isSmallScreen)
+    print("Touch Enabled:", UserInputService.TouchEnabled)
+    print("Mobile Sizing:", useMobileSizing)
     print("Device Type:", isMobile and "MOBILE" or (isTablet and "TABLET" or "DESKTOP"))
-    print("======================================")
+    print("=============================================")
     
     return {
         Width = screenWidth,
@@ -202,8 +192,14 @@ local function CreatePadding(parent, all)
 end
 
 local function Tween(object, properties, duration)
+    -- Rayfield uses longer durations on mobile for smoother experience
+    local adjustedDuration = duration or Config.AnimationSpeed
+    if ScreenInfo.IsMobile then
+        adjustedDuration = adjustedDuration * 1.2  -- 20% slower on mobile
+    end
+    
     local tweenInfo = TweenInfo.new(
-        duration or Config.AnimationSpeed,
+        adjustedDuration,
         Config.EasingStyle,
         Config.EasingDirection
     )
@@ -218,9 +214,18 @@ local function MakeDraggable(frame, dragHandle)
     local dragStart
     local startPos
     
+    -- Rayfield's smooth dragging with device-specific tweening
     local function update(input)
         local delta = input.Position - dragStart
-        Tween(frame, {Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)}, 0.1)
+        -- Rayfield uses exponential easing for smooth dragging on mobile
+        local tweenDuration = ScreenInfo.IsMobile and 0.4 or 0.1
+        local easingStyle = ScreenInfo.IsMobile and Enum.EasingStyle.Exponential or Enum.EasingStyle.Quad
+        
+        local tweenInfo = TweenInfo.new(tweenDuration, easingStyle, Enum.EasingDirection.Out)
+        local tween = TweenService:Create(frame, tweenInfo, {
+            Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+        })
+        tween:Play()
     end
     
     dragHandle.InputBegan:Connect(function(input)
@@ -240,6 +245,13 @@ local function MakeDraggable(frame, dragHandle)
     dragHandle.InputChanged:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
             dragInput = input
+        end
+    end)
+    
+    -- Rayfield also handles InputEnded for touch devices
+    UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = false
         end
     end)
     
@@ -296,7 +308,7 @@ function CustomGUI.new(config)
     CreateCorner(self.MainWindow)
     CreateStroke(self.MainWindow)
     
-    -- Shadow Effect
+    -- Shadow Effect (Disabled on mobile for performance like Rayfield)
     local shadow = Instance.new("ImageLabel")
     shadow.Name = "Shadow"
     shadow.Size = UDim2.new(1, 40, 1, 40)
@@ -304,10 +316,11 @@ function CustomGUI.new(config)
     shadow.BackgroundTransparency = 1
     shadow.Image = "rbxassetid://6015897843"
     shadow.ImageColor3 = Color3.fromRGB(0, 0, 0)
-    shadow.ImageTransparency = 0.7
+    shadow.ImageTransparency = ScreenInfo.IsMobile and 1 or 0.7  -- Hide shadow on mobile
     shadow.ScaleType = Enum.ScaleType.Slice
     shadow.SliceCenter = Rect.new(100, 100, 100, 100)
     shadow.ZIndex = 0
+    shadow.Visible = not ScreenInfo.IsMobile  -- Disable shadows on mobile for better performance
     shadow.Parent = self.MainWindow
     
     -- Header
@@ -380,7 +393,7 @@ function CustomGUI.new(config)
         Tween(self.MinimizeButton, {BackgroundColor3 = Config.AccentColor})
     end)
     
-    -- Minimize Circle (Hidden by default)
+    -- Minimize Circle (Hidden by default) - Mobile Prompt like Rayfield
     self.MinimizeCircle = Instance.new("Frame")
     self.MinimizeCircle.Name = "MinimizeCircle"
     self.MinimizeCircle.Size = UDim2.new(0, Config.MinimizeCircleSize, 0, Config.MinimizeCircleSize)
@@ -391,6 +404,19 @@ function CustomGUI.new(config)
     self.MinimizeCircle.Parent = self.ScreenGui
     CreateCorner(self.MinimizeCircle, UDim.new(1, 0)) -- Full circle
     CreateStroke(self.MinimizeCircle, Config.BorderColor, 2)
+    
+    -- Mobile-specific prompt text (like Rayfield's MPrompt)
+    if ScreenInfo.IsMobile then
+        local PromptLabel = Instance.new("TextLabel")
+        PromptLabel.Name = "PromptLabel"
+        PromptLabel.Size = UDim2.new(1, 0, 1, 0)
+        PromptLabel.BackgroundTransparency = 1
+        PromptLabel.Text = "Show"
+        PromptLabel.TextColor3 = Config.TextColor
+        PromptLabel.TextSize = Config.FontSizeNormal
+        PromptLabel.Font = Config.TitleFont
+        PromptLabel.Parent = self.MinimizeCircle
+    end
     
     local CircleButton = Instance.new("TextButton")
     CircleButton.Size = UDim2.new(1, 0, 1, 0)
@@ -650,9 +676,10 @@ function CustomGUI:_CreateButton(config, tab)
     ButtonLabel.TextXAlignment = Enum.TextXAlignment.Left
     ButtonLabel.Parent = ButtonFrame
     
+    -- Rayfield-style button interaction with touch support
     ButtonClick.MouseButton1Click:Connect(function()
         Tween(ButtonFrame, {BackgroundColor3 = Config.AccentColor})
-        task.wait(0.1)
+        task.wait(ScreenInfo.IsMobile and 0.15 or 0.1)  -- Longer feedback on mobile
         Tween(ButtonFrame, {BackgroundColor3 = Config.SecondaryColor})
         
         pcall(function()
@@ -660,13 +687,16 @@ function CustomGUI:_CreateButton(config, tab)
         end)
     end)
     
-    ButtonClick.MouseEnter:Connect(function()
-        Tween(ButtonFrame, {BackgroundColor3 = Config.BorderColor})
-    end)
-    
-    ButtonClick.MouseLeave:Connect(function()
-        Tween(ButtonFrame, {BackgroundColor3 = Config.SecondaryColor})
-    end)
+    -- Hover effects disabled on mobile (touch devices don't have hover)
+    if not ScreenInfo.IsMobile then
+        ButtonClick.MouseEnter:Connect(function()
+            Tween(ButtonFrame, {BackgroundColor3 = Config.BorderColor})
+        end)
+        
+        ButtonClick.MouseLeave:Connect(function()
+            Tween(ButtonFrame, {BackgroundColor3 = Config.SecondaryColor})
+        end)
+    end
     
     return Button
 end
