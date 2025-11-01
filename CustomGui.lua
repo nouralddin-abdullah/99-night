@@ -572,12 +572,11 @@ function CustomGUI.new(config)
     -- Update drag bar position with main window
     local function UpdateDragBarPosition()
         local yOffset = ScreenInfo.IsMobile and 8 or 12
-        DragBar.Position = UDim2.new(
-            self.MainWindow.Position.X.Scale,
-            self.MainWindow.Position.X.Offset,
-            self.MainWindow.Position.Y.Scale,
-            self.MainWindow.Position.Y.Offset + self.MainWindow.AbsoluteSize.Y + yOffset
-        )
+        -- Center the drag bar under the window
+        local windowCenterX = self.MainWindow.AbsolutePosition.X + (self.MainWindow.AbsoluteSize.X / 2)
+        local windowBottomY = self.MainWindow.AbsolutePosition.Y + self.MainWindow.AbsoluteSize.Y + yOffset
+        
+        DragBar.Position = UDim2.fromOffset(windowCenterX, windowBottomY)
     end
     
     -- Make window draggable from the bottom drag bar
