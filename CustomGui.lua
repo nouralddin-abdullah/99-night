@@ -498,6 +498,105 @@ function CustomGUI.new(config)
     -- Make window draggable
     MakeDraggable(self.MainWindow, self.Header)
     
+    -- Drag Bar at bottom (like Rayfield)
+    local DragBar = Instance.new("Frame")
+    DragBar.Name = "DragBar"
+    DragBar.Size = UDim2.new(0, 0, 0, 0)
+    DragBar.Position = UDim2.new(0.5, 0, 1, ScreenInfo.IsMobile and 8 or 12)
+    DragBar.AnchorPoint = Vector2.new(0.5, 0)
+    DragBar.BackgroundTransparency = 1
+    DragBar.Parent = self.ScreenGui
+    DragBar.ZIndex = 101
+    
+    -- Visual drag line
+    local DragLine = Instance.new("Frame")
+    DragLine.Name = "DragLine"
+    DragLine.Size = UDim2.new(0, 100, 0, 4)
+    DragLine.Position = UDim2.new(0.5, 0, 0.5, 0)
+    DragLine.AnchorPoint = Vector2.new(0.5, 0.5)
+    DragLine.BackgroundColor3 = Config.AccentColor
+    DragLine.BackgroundTransparency = 0.7
+    DragLine.BorderSizePixel = 0
+    DragLine.Parent = DragBar
+    CreateCorner(DragLine, UDim.new(0, 2))
+    
+    -- Interaction frame
+    local DragInteract = Instance.new("TextButton")
+    DragInteract.Name = "Interact"
+    DragInteract.Size = UDim2.new(0, 140, 0, 20)
+    DragInteract.Position = UDim2.new(0.5, 0, 0.5, 0)
+    DragInteract.AnchorPoint = Vector2.new(0.5, 0.5)
+    DragInteract.BackgroundTransparency = 1
+    DragInteract.Text = ""
+    DragInteract.Parent = DragBar
+    
+    -- Hover effects (Rayfield-style)
+    DragInteract.MouseEnter:Connect(function()
+        if not self.MainWindow.Visible then return end
+        Tween(DragLine, {
+            BackgroundTransparency = 0.5,
+            Size = UDim2.new(0, 120, 0, 4)
+        }, 0.25)
+    end)
+    
+    DragInteract.MouseLeave:Connect(function()
+        if not self.MainWindow.Visible then return end
+        Tween(DragLine, {
+            BackgroundTransparency = 0.7,
+            Size = UDim2.new(0, 100, 0, 4)
+        }, 0.25)
+    end)
+    
+    -- Dragging with visual feedback
+    local draggingBar = false
+    DragInteract.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            draggingBar = true
+            Tween(DragLine, {
+                Size = UDim2.new(0, 110, 0, 4),
+                BackgroundTransparency = 0
+            }, 0.35)
+        end
+    end)
+    
+    DragInteract.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            draggingBar = false
+            Tween(DragLine, {
+                Size = UDim2.new(0, 100, 0, 4),
+                BackgroundTransparency = 0.7
+            }, 0.35)
+        end
+    end)
+    
+    -- Update drag bar position with main window
+    local function UpdateDragBarPosition()
+        local yOffset = ScreenInfo.IsMobile and 8 or 12
+        DragBar.Position = UDim2.new(
+            self.MainWindow.Position.X.Scale,
+            self.MainWindow.Position.X.Offset,
+            self.MainWindow.Position.Y.Scale,
+            self.MainWindow.Position.Y.Offset + self.MainWindow.AbsoluteSize.Y + yOffset
+        )
+    end
+    
+    -- Make window draggable from the bottom drag bar
+    MakeDraggable(self.MainWindow, DragInteract)
+    
+    -- Update drag bar position when window moves
+    self.MainWindow:GetPropertyChangedSignal("Position"):Connect(UpdateDragBarPosition)
+    self.MainWindow:GetPropertyChangedSignal("Size"):Connect(UpdateDragBarPosition)
+    UpdateDragBarPosition()
+    
+    -- Hide/show drag bar with window
+    self.MainWindow:GetPropertyChangedSignal("Visible"):Connect(function()
+        DragBar.Visible = self.MainWindow.Visible
+    end)
+    DragBar.Visible = self.MainWindow.Visible
+    
+    -- Store reference
+    self.DragBar = DragBar
+    
     return self
 end
 
