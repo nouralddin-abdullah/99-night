@@ -54,16 +54,16 @@ local function GetResponsiveConfig()
         -- Mobile: Smaller, more compact
         return {
             WindowWidth = math.min(ScreenInfo.Width * 0.95, 380),
-            WindowHeight = math.min(ScreenInfo.Height * 0.85, 500),
+            WindowHeight = math.min(ScreenInfo.Height * 0.65, 420),
             TabContainerWidth = 100,
-            HeaderHeight = 45,
-            ButtonHeight = 32,
-            ToggleHeight = 32,
-            SliderHeight = 40,
-            DropdownHeight = 32,
+            HeaderHeight = 40,
+            ButtonHeight = 30,
+            ToggleHeight = 30,
+            SliderHeight = 38,
+            DropdownHeight = 30,
             MinimizeCircleSize = 50,
-            FontSizeTitle = 16,
-            FontSizeNormal = 13,
+            FontSizeTitle = 15,
+            FontSizeNormal = 12,
         }
     elseif ScreenInfo.IsTablet then
         -- Tablet: Medium size
