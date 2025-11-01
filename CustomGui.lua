@@ -26,6 +26,80 @@ local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 
+-- Detect screen size and device type
+local function GetScreenInfo()
+    local ViewportSize = workspace.Camera.ViewportSize
+    local screenWidth = ViewportSize.X
+    local screenHeight = ViewportSize.Y
+    
+    -- Determine device type based on screen size
+    local isMobile = screenWidth < 768 or screenHeight < 768
+    local isTablet = screenWidth >= 768 and screenWidth < 1024
+    local isDesktop = screenWidth >= 1024
+    
+    return {
+        Width = screenWidth,
+        Height = screenHeight,
+        IsMobile = isMobile,
+        IsTablet = isTablet,
+        IsDesktop = isDesktop
+    }
+end
+
+local ScreenInfo = GetScreenInfo()
+
+-- Responsive sizing based on device
+local function GetResponsiveConfig()
+    if ScreenInfo.IsMobile then
+        -- Mobile: Smaller, more compact
+        return {
+            WindowWidth = math.min(ScreenInfo.Width * 0.95, 380),
+            WindowHeight = math.min(ScreenInfo.Height * 0.85, 500),
+            TabContainerWidth = 100,
+            HeaderHeight = 45,
+            ButtonHeight = 32,
+            ToggleHeight = 32,
+            SliderHeight = 40,
+            DropdownHeight = 32,
+            MinimizeCircleSize = 50,
+            FontSizeTitle = 16,
+            FontSizeNormal = 13,
+        }
+    elseif ScreenInfo.IsTablet then
+        -- Tablet: Medium size
+        return {
+            WindowWidth = math.min(ScreenInfo.Width * 0.75, 480),
+            WindowHeight = math.min(ScreenInfo.Height * 0.80, 550),
+            TabContainerWidth = 120,
+            HeaderHeight = 48,
+            ButtonHeight = 34,
+            ToggleHeight = 34,
+            SliderHeight = 43,
+            DropdownHeight = 34,
+            MinimizeCircleSize = 55,
+            FontSizeTitle = 18,
+            FontSizeNormal = 14,
+        }
+    else
+        -- Desktop: Full size
+        return {
+            WindowWidth = 550,
+            WindowHeight = 600,
+            TabContainerWidth = 140,
+            HeaderHeight = 50,
+            ButtonHeight = 35,
+            ToggleHeight = 35,
+            SliderHeight = 45,
+            DropdownHeight = 35,
+            MinimizeCircleSize = 60,
+            FontSizeTitle = 20,
+            FontSizeNormal = 14,
+        }
+    end
+end
+
+local ResponsiveConfig = GetResponsiveConfig()
+
 -- Configuration
 local Config = {
     -- Colors
@@ -38,13 +112,19 @@ local Config = {
     SuccessColor = Color3.fromRGB(67, 181, 129),
     ErrorColor = Color3.fromRGB(240, 71, 71),
     
-    -- Sizes
-    WindowSize = UDim2.new(0, 550, 0, 600),
-    TabButtonSize = UDim2.new(0, 120, 0, 40),
-    ButtonHeight = 35,
-    ToggleHeight = 35,
-    SliderHeight = 45,
-    DropdownHeight = 35,
+    -- Responsive Sizes
+    WindowSize = UDim2.new(0, ResponsiveConfig.WindowWidth, 0, ResponsiveConfig.WindowHeight),
+    TabContainerWidth = ResponsiveConfig.TabContainerWidth,
+    HeaderHeight = ResponsiveConfig.HeaderHeight,
+    ButtonHeight = ResponsiveConfig.ButtonHeight,
+    ToggleHeight = ResponsiveConfig.ToggleHeight,
+    SliderHeight = ResponsiveConfig.SliderHeight,
+    DropdownHeight = ResponsiveConfig.DropdownHeight,
+    MinimizeCircleSize = ResponsiveConfig.MinimizeCircleSize,
+    
+    -- Font Sizes
+    FontSizeTitle = ResponsiveConfig.FontSizeTitle,
+    FontSizeNormal = ResponsiveConfig.FontSizeNormal,
     
     -- Animation
     AnimationSpeed = 0.2,
@@ -143,7 +223,10 @@ function CustomGUI.new(config)
     -- Configuration
     self.Title = config.Title or "Universal GUI"
     self.Size = config.Size or Config.WindowSize
-    self.Position = config.Position or UDim2.new(0.5, -275, 0.5, -300)
+    -- Center window based on responsive size
+    local xOffset = -ResponsiveConfig.WindowWidth / 2
+    local yOffset = -ResponsiveConfig.WindowHeight / 2
+    self.Position = config.Position or UDim2.new(0.5, xOffset, 0.5, yOffset)
     self.Visible = config.Visible ~= false
     
     -- Storage
@@ -196,7 +279,7 @@ function CustomGUI.new(config)
     -- Header
     self.Header = Instance.new("Frame")
     self.Header.Name = "Header"
-    self.Header.Size = UDim2.new(1, 0, 0, 50)
+    self.Header.Size = UDim2.new(1, 0, 0, Config.HeaderHeight)
     self.Header.BackgroundColor3 = Config.SecondaryColor
     self.Header.BorderSizePixel = 0
     self.Header.Parent = self.MainWindow
@@ -210,7 +293,7 @@ function CustomGUI.new(config)
     self.TitleLabel.BackgroundTransparency = 1
     self.TitleLabel.Text = self.Title
     self.TitleLabel.TextColor3 = Config.TextColor
-    self.TitleLabel.TextSize = 18
+    self.TitleLabel.TextSize = Config.FontSizeTitle
     self.TitleLabel.Font = Config.TitleFont
     self.TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
     self.TitleLabel.Parent = self.Header
@@ -224,7 +307,7 @@ function CustomGUI.new(config)
     self.MinimizeButton.BorderSizePixel = 0
     self.MinimizeButton.Text = "─"
     self.MinimizeButton.TextColor3 = Config.TextColor
-    self.MinimizeButton.TextSize = 18
+    self.MinimizeButton.TextSize = Config.FontSizeTitle
     self.MinimizeButton.Font = Config.TitleFont
     self.MinimizeButton.Parent = self.Header
     CreateCorner(self.MinimizeButton, UDim.new(0, 6))
@@ -238,7 +321,7 @@ function CustomGUI.new(config)
     self.CloseButton.BorderSizePixel = 0
     self.CloseButton.Text = "✕"
     self.CloseButton.TextColor3 = Config.TextColor
-    self.CloseButton.TextSize = 18
+    self.CloseButton.TextSize = Config.FontSizeTitle
     self.CloseButton.Font = Config.TitleFont
     self.CloseButton.Parent = self.Header
     CreateCorner(self.CloseButton, UDim.new(0, 6))
@@ -266,8 +349,8 @@ function CustomGUI.new(config)
     -- Minimize Circle (Hidden by default)
     self.MinimizeCircle = Instance.new("Frame")
     self.MinimizeCircle.Name = "MinimizeCircle"
-    self.MinimizeCircle.Size = UDim2.new(0, 60, 0, 60)
-    self.MinimizeCircle.Position = UDim2.new(1, -80, 0, 20)
+    self.MinimizeCircle.Size = UDim2.new(0, Config.MinimizeCircleSize, 0, Config.MinimizeCircleSize)
+    self.MinimizeCircle.Position = UDim2.new(1, -(Config.MinimizeCircleSize + 20), 0, 20)
     self.MinimizeCircle.BackgroundColor3 = Config.AccentColor
     self.MinimizeCircle.BorderSizePixel = 0
     self.MinimizeCircle.Visible = false
@@ -323,8 +406,8 @@ function CustomGUI.new(config)
     -- Tab Container
     self.TabContainer = Instance.new("Frame")
     self.TabContainer.Name = "TabContainer"
-    self.TabContainer.Size = UDim2.new(0, 140, 1, -60)
-    self.TabContainer.Position = UDim2.new(0, 10, 0, 55)
+    self.TabContainer.Size = UDim2.new(0, Config.TabContainerWidth, 1, -(Config.HeaderHeight + 10))
+    self.TabContainer.Position = UDim2.new(0, 10, 0, Config.HeaderHeight + 5)
     self.TabContainer.BackgroundTransparency = 1
     self.TabContainer.Parent = self.MainWindow
     
@@ -336,11 +419,11 @@ function CustomGUI.new(config)
     -- Content Container
     self.ContentContainer = Instance.new("ScrollingFrame")
     self.ContentContainer.Name = "ContentContainer"
-    self.ContentContainer.Size = UDim2.new(1, -170, 1, -70)
-    self.ContentContainer.Position = UDim2.new(0, 160, 0, 60)
+    self.ContentContainer.Size = UDim2.new(1, -(Config.TabContainerWidth + 30), 1, -(Config.HeaderHeight + 20))
+    self.ContentContainer.Position = UDim2.new(0, Config.TabContainerWidth + 20, 0, Config.HeaderHeight + 10)
     self.ContentContainer.BackgroundTransparency = 1
     self.ContentContainer.BorderSizePixel = 0
-    self.ContentContainer.ScrollBarThickness = 4
+    self.ContentContainer.ScrollBarThickness = ScreenInfo.IsMobile and 3 or 4
     self.ContentContainer.ScrollBarImageColor3 = Config.AccentColor
     self.ContentContainer.CanvasSize = UDim2.new(0, 0, 0, 0)
     self.ContentContainer.AutomaticCanvasSize = Enum.AutomaticSize.Y
@@ -374,7 +457,7 @@ function CustomGUI:CreateTab(config)
     Tab.Button.BorderSizePixel = 0
     Tab.Button.Text = Tab.Icon .. " " .. Tab.Name
     Tab.Button.TextColor3 = Config.SubTextColor
-    Tab.Button.TextSize = 14
+    Tab.Button.TextSize = Config.FontSizeNormal
     Tab.Button.Font = Config.MainFont
     Tab.Button.TextXAlignment = Enum.TextXAlignment.Left
     Tab.Button.Parent = self.TabContainer
@@ -494,7 +577,7 @@ function CustomGUI:_CreateSection(name, tab)
     Label.BackgroundTransparency = 1
     Label.Text = "━━ " .. name .. " ━━"
     Label.TextColor3 = Config.AccentColor
-    Label.TextSize = 14
+    Label.TextSize = Config.FontSizeNormal
     Label.Font = Config.TitleFont
     Label.TextXAlignment = Enum.TextXAlignment.Left
     Label.Parent = Section
@@ -528,7 +611,7 @@ function CustomGUI:_CreateButton(config, tab)
     ButtonLabel.BackgroundTransparency = 1
     ButtonLabel.Text = Button.Name
     ButtonLabel.TextColor3 = Config.TextColor
-    ButtonLabel.TextSize = 14
+    ButtonLabel.TextSize = Config.FontSizeNormal
     ButtonLabel.Font = Config.MainFont
     ButtonLabel.TextXAlignment = Enum.TextXAlignment.Left
     ButtonLabel.Parent = ButtonFrame
