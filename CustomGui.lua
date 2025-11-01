@@ -1011,6 +1011,125 @@ function CustomGUI:_CreateDropdown(config, tab)
     
     UpdateDisplay()
     
+    -- Add UpdateOptions method to refresh dropdown options dynamically
+    Dropdown.UpdateOptions = function(self, newOptions, newDefault)
+        -- Clear existing options
+        for _, child in ipairs(OptionsContainer:GetChildren()) do
+            if child:IsA("TextButton") then
+                child:Destroy()
+            end
+        end
+        
+        -- Update options list
+        Dropdown.Options = newOptions or {}
+        
+        -- Reset current value based on new options
+        if Dropdown.Multi then
+            Dropdown.CurrentValue = {}
+            for _, option in ipairs(Dropdown.Options) do
+                Dropdown.CurrentValue[option] = false
+            end
+        else
+            Dropdown.CurrentValue = newDefault or (newOptions and newOptions[1]) or nil
+        end
+        
+        -- Recreate option buttons
+        for _, option in ipairs(Dropdown.Options) do
+            local OptionButton = Instance.new("TextButton")
+            OptionButton.Size = UDim2.new(1, -10, 0, 30)
+            OptionButton.BackgroundColor3 = Config.BackgroundColor
+            OptionButton.BorderSizePixel = 0
+            OptionButton.Text = ""
+            OptionButton.Parent = OptionsContainer
+            CreateCorner(OptionButton, UDim.new(0, 5))
+            
+            local OptionLabel = Instance.new("TextLabel")
+            OptionLabel.Size = UDim2.new(1, -20, 1, 0)
+            OptionLabel.Position = UDim2.new(0, 10, 0, 0)
+            OptionLabel.BackgroundTransparency = 1
+            OptionLabel.Text = option
+            OptionLabel.TextColor3 = Config.TextColor
+            OptionLabel.TextSize = 13
+            OptionLabel.Font = Config.MainFont
+            OptionLabel.TextXAlignment = Enum.TextXAlignment.Left
+            OptionLabel.Parent = OptionButton
+            
+            if Dropdown.Multi then
+                -- Checkbox for multi-select
+                local Checkbox = Instance.new("Frame")
+                Checkbox.Size = UDim2.new(0, 16, 0, 16)
+                Checkbox.Position = UDim2.new(1, -26, 0.5, -8)
+                Checkbox.BackgroundColor3 = Config.BackgroundColor
+                Checkbox.BorderSizePixel = 0
+                Checkbox.Parent = OptionButton
+                CreateCorner(Checkbox, UDim.new(0, 3))
+                CreateStroke(Checkbox, Config.BorderColor)
+                
+                local Checkmark = Instance.new("TextLabel")
+                Checkmark.Size = UDim2.new(1, 0, 1, 0)
+                Checkmark.BackgroundTransparency = 1
+                Checkmark.Text = "✓"
+                Checkmark.TextColor3 = Config.AccentColor
+                Checkmark.TextSize = 14
+                Checkmark.Font = Config.TitleFont
+                Checkmark.Visible = false
+                Checkmark.Parent = Checkbox
+                
+                OptionButton.MouseButton1Click:Connect(function()
+                    Dropdown.CurrentValue[option] = not Dropdown.CurrentValue[option]
+                    Checkmark.Visible = Dropdown.CurrentValue[option]
+                    
+                    if Dropdown.CurrentValue[option] then
+                        Tween(Checkbox, {BackgroundColor3 = Config.AccentColor})
+                    else
+                        Tween(Checkbox, {BackgroundColor3 = Config.BackgroundColor})
+                    end
+                    
+                    UpdateDisplay()
+                    
+                    if Dropdown.Flag then
+                        self.Flags[Dropdown.Flag] = Dropdown.CurrentValue
+                    end
+                    
+                    pcall(function()
+                        Dropdown.Callback(Dropdown.CurrentValue)
+                    end)
+                end)
+            else
+                -- Single select
+                OptionButton.MouseButton1Click:Connect(function()
+                    Dropdown.CurrentValue = option
+                    UpdateDisplay()
+                    ToggleDropdown()
+                    
+                    if Dropdown.Flag then
+                        self.Flags[Dropdown.Flag] = option
+                    end
+                    
+                    pcall(function()
+                        Dropdown.Callback(option)
+                    end)
+                end)
+            end
+            
+            OptionButton.MouseEnter:Connect(function()
+                Tween(OptionButton, {BackgroundColor3 = Config.BorderColor})
+            end)
+            
+            OptionButton.MouseLeave:Connect(function()
+                Tween(OptionButton, {BackgroundColor3 = Config.BackgroundColor})
+            end)
+        end
+        
+        -- Update display with new values
+        UpdateDisplay()
+        
+        -- Close dropdown if it was open
+        if Dropdown.Opened then
+            ToggleDropdown()
+        end
+    end
+    
     return Dropdown
 end
 
