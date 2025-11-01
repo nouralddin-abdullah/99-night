@@ -67,7 +67,7 @@ local function GetResponsiveConfig()
         -- Mobile: Much smaller and compact for phones
         return {
             WindowWidth = math.min(ScreenInfo.Width * 0.92, 360),
-            WindowHeight = math.min(ScreenInfo.Height * 0.50, 350),
+            WindowHeight = math.min(ScreenInfo.Height * 0.30, 280),
             TabContainerWidth = 85,
             HeaderHeight = 35,
             ButtonHeight = 28,
