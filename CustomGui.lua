@@ -32,10 +32,23 @@ local function GetScreenInfo()
     local screenWidth = ViewportSize.X
     local screenHeight = ViewportSize.Y
     
-    -- Determine device type based on screen size
-    local isMobile = screenWidth < 768 or screenHeight < 768
-    local isTablet = screenWidth >= 768 and screenWidth < 1024
-    local isDesktop = screenWidth >= 1024
+    -- Check if running on mobile via UserInputService
+    local UserInputService = game:GetService("UserInputService")
+    local touchEnabled = UserInputService.TouchEnabled
+    local mouseEnabled = UserInputService.MouseEnabled
+    local keyboardEnabled = UserInputService.KeyboardEnabled
+    
+    -- Mobile detection: Touch enabled AND (no keyboard OR no mouse) OR small screen
+    local isMobile = (touchEnabled and (not keyboardEnabled or not mouseEnabled)) or screenWidth < 600 or screenHeight < 600
+    local isTablet = not isMobile and (screenWidth >= 600 and screenWidth < 1024)
+    local isDesktop = not isMobile and not isTablet
+    
+    -- Debug info
+    print("=== GUI Screen Detection ===")
+    print("Screen Size:", screenWidth, "x", screenHeight)
+    print("Touch:", touchEnabled, "Mouse:", mouseEnabled, "Keyboard:", keyboardEnabled)
+    print("Device Type:", isMobile and "MOBILE" or (isTablet and "TABLET" or "DESKTOP"))
+    print("===========================")
     
     return {
         Width = screenWidth,
