@@ -1130,6 +1130,35 @@ function CustomGUI:_CreateDropdown(config, tab)
         end
     end
     
+    -- Add Set method to update dropdown value programmatically
+    Dropdown.Set = function(self, value)
+        if Dropdown.Multi then
+            -- For multi-select, value should be a table
+            if type(value) == "table" then
+                Dropdown.CurrentValue = value
+                UpdateDisplay()
+            end
+        else
+            -- For single-select, check if value exists in options
+            local exists = false
+            for _, option in ipairs(Dropdown.Options) do
+                if option == value then
+                    exists = true
+                    break
+                end
+            end
+            
+            if exists then
+                Dropdown.CurrentValue = value
+                UpdateDisplay()
+                
+                if Dropdown.Flag then
+                    self.Flags[Dropdown.Flag] = value
+                end
+            end
+        end
+    end
+    
     return Dropdown
 end
 
@@ -1246,6 +1275,15 @@ function CustomGUI:_CreateTextBox(config, tab)
         end)
     end)
     
+    -- Add Set method to update text programmatically
+    TextBox.Set = function(self, text)
+        Input.Text = text
+        
+        if TextBox.Flag then
+            self.Flags[TextBox.Flag] = text
+        end
+    end
+    
     return TextBox
 end
 
@@ -1318,6 +1356,16 @@ function CustomGUI:_CreateColorPicker(config, tab)
     ColorButton.MouseLeave:Connect(function()
         Tween(ColorFrame, {BackgroundColor3 = Config.SecondaryColor})
     end)
+    
+    -- Add Set method to update color programmatically
+    ColorPicker.Set = function(self, color)
+        ColorPicker.CurrentColor = color
+        ColorDisplay.BackgroundColor3 = color
+        
+        if ColorPicker.Flag then
+            self.Flags[ColorPicker.Flag] = color
+        end
+    end
     
     return ColorPicker
 end
