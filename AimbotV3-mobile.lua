@@ -10,78 +10,80 @@
 local game, workspace = game, workspace
 local getrawmetatable, getmetatable, setmetatable, pcall, getgenv, next, tick = getrawmetatable, getmetatable, setmetatable, pcall, getgenv, next, tick
 
--- Simplified Mobile Drawing API - More stable
+-- Refactored Mobile Drawing API - Immediate initialization
 local function CreateMobileDrawing(drawingType)
 	if drawingType == "Circle" then
+		-- Initialize GUI immediately
+		local screenGui, frame, stroke
+		
+		pcall(function()
+			screenGui = Instance.new("ScreenGui")
+			screenGui.Name = "MobileFOVCircle_" .. math.random(1000, 9999)
+			screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+			screenGui.DisplayOrder = 999999
+			screenGui.IgnoreGuiInset = true
+			screenGui.ResetOnSpawn = false
+			screenGui.Enabled = true
+			
+			if gethui then
+				screenGui.Parent = gethui()
+			elseif syn and syn.protect_gui then
+				syn.protect_gui(screenGui)
+				screenGui.Parent = game:GetService("CoreGui")
+			else
+				screenGui.Parent = game:GetService("CoreGui")
+			end
+			
+			frame = Instance.new("Frame")
+			frame.Name = "Circle"
+			frame.Size = UDim2.fromOffset(180, 180)
+			frame.Position = UDim2.fromOffset(0, 0)
+			frame.AnchorPoint = Vector2.new(0.5, 0.5)
+			frame.BackgroundTransparency = 1
+			frame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+			frame.BorderSizePixel = 0
+			frame.Parent = screenGui
+			
+			local corner = Instance.new("UICorner")
+			corner.CornerRadius = UDim.new(1, 0)
+			corner.Parent = frame
+			
+			stroke = Instance.new("UIStroke")
+			stroke.Thickness = 1
+			stroke.Color = Color3.fromRGB(255, 255, 255)
+			stroke.Transparency = 0
+			stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+			stroke.Parent = frame
+		end)
+		
 		local circleObject = {
-			_screenGui = nil,
-			_frame = nil,
-			_stroke = nil,
-			_visible = false,
+			_screenGui = screenGui,
+			_frame = frame,
+			_stroke = stroke,
+			_visible = true,
 			_radius = 90,
 			_thickness = 1,
 			_transparency = 1,
-			_filled = false,
 			_color = Color3.fromRGB(255, 255, 255),
-			_position = Vector2.new(0, 0),
-			_initialized = false
+			_position = Vector2.new(0, 0)
 		}
-		
-		local function InitializeGUI()
-			if circleObject._initialized then return end
-			
-			local success = pcall(function()
-				local screenGui = Instance.new("ScreenGui")
-				screenGui.Name = "MobileFOVCircle_" .. math.random(1000, 9999)
-				screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-				screenGui.DisplayOrder = 999999
-				screenGui.IgnoreGuiInset = true
-				screenGui.ResetOnSpawn = false
-				screenGui.Enabled = true
-				
-				if gethui then
-					screenGui.Parent = gethui()
-				elseif syn and syn.protect_gui then
-					syn.protect_gui(screenGui)
-					screenGui.Parent = game:GetService("CoreGui")
-				else
-					screenGui.Parent = game:GetService("CoreGui")
-				end
-				
-				local frame = Instance.new("Frame")
-				frame.Name = "Circle"
-				frame.Size = UDim2.fromOffset(180, 180)
-				frame.Position = UDim2.fromOffset(0, 0)
-				frame.AnchorPoint = Vector2.new(0.5, 0.5)
-				frame.BackgroundTransparency = 1
-				frame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-				frame.BorderSizePixel = 0
-				frame.Parent = screenGui
-				
-				local corner = Instance.new("UICorner")
-				corner.CornerRadius = UDim.new(1, 0)
-				corner.Parent = frame
-				
-				local stroke = Instance.new("UIStroke")
-				stroke.Thickness = 1
-				stroke.Color = Color3.fromRGB(255, 255, 255)
-				stroke.Transparency = 0
-				stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-				stroke.Parent = frame
-				
-				circleObject._screenGui = screenGui
-				circleObject._frame = frame
-				circleObject._stroke = stroke
-				circleObject._initialized = true
-			end)
-		end
 		
 		return setmetatable(circleObject, {
 			__index = function(self, key)
 				if key == "Visible" then
 					return self._visible
-				elseif key == "Radius" or key == "Thickness" or key == "Transparency" or key == "Filled" or key == "Color" or key == "Position" or key == "NumSides" then
-					return self["_" .. string.lower(key)] or 60
+				elseif key == "Radius" then
+					return self._radius
+				elseif key == "Thickness" then
+					return self._thickness
+				elseif key == "Transparency" then
+					return self._transparency
+				elseif key == "Color" then
+					return self._color
+				elseif key == "Position" then
+					return self._position
+				elseif key == "NumSides" or key == "Filled" then
+					return 60 -- Default value
 				elseif key == "Remove" then
 					return function()
 						pcall(function()
@@ -93,49 +95,49 @@ local function CreateMobileDrawing(drawingType)
 				end
 			end,
 			__newindex = function(self, key, value)
-				pcall(function()
-					if key == "Visible" then
-						self._visible = value
-						-- Always initialize on first property set
-						if not self._initialized then
-							InitializeGUI()
-						end
+				if key == "Visible" then
+					self._visible = value
+					pcall(function()
 						if self._screenGui then
 							self._screenGui.Enabled = value
 						end
-					elseif key == "Radius" then
-						self._radius = value
-						-- Initialize if not done yet
-						if not self._initialized then
-							InitializeGUI()
-						end
+					end)
+				elseif key == "Radius" then
+					self._radius = value
+					pcall(function()
 						if self._frame then
 							self._frame.Size = UDim2.fromOffset(value * 2, value * 2)
 						end
-					elseif key == "Thickness" then
-						self._thickness = value
+					end)
+				elseif key == "Thickness" then
+					self._thickness = value
+					pcall(function()
 						if self._stroke then
 							self._stroke.Thickness = value
 						end
-					elseif key == "Transparency" then
-						self._transparency = value
+					end)
+				elseif key == "Transparency" then
+					self._transparency = value
+					pcall(function()
 						if self._stroke then
 							self._stroke.Transparency = 1 - value
 						end
-					elseif key == "Color" then
-						self._color = value
+					end)
+				elseif key == "Color" then
+					self._color = value
+					pcall(function()
 						if self._stroke then
 							self._stroke.Color = value
 						end
-					elseif key == "Position" then
-						self._position = value
+					end)
+				elseif key == "Position" then
+					self._position = value
+					pcall(function()
 						if self._frame then
 							self._frame.Position = UDim2.fromOffset(value.X, value.Y)
 						end
-					elseif key == "Filled" or key == "NumSides" then
-						-- Ignore these for mobile
-					end
-				end)
+					end)
+				end
 			end
 		})
 	end
@@ -282,16 +284,6 @@ getgenv().ExunysDeveloperAimbot = {
 
 local Environment = getgenv().ExunysDeveloperAimbot
 
--- Initialize FOV circles immediately for mobile
-pcall(function()
-	setrenderproperty(Environment.FOVCircle, "Visible", true)
-	setrenderproperty(Environment.FOVCircle, "Radius", 90)
-	setrenderproperty(Environment.FOVCircle, "Transparency", 1)
-	setrenderproperty(Environment.FOVCircleOutline, "Visible", true)
-	setrenderproperty(Environment.FOVCircleOutline, "Radius", 90)
-	setrenderproperty(Environment.FOVCircleOutline, "Transparency", 1)
-end)
-
 --// Core Functions
 
 local FixUsername = function(String)
@@ -374,8 +366,35 @@ local GetClosestPlayer = function()
 				end
 			end
 		end
-	elseif (GetMouseLocation(UserInputService) - ConvertVector(WorldToViewportPoint(Camera, __index(__index(__index(Environment.Locked, "Character"), LockPart), "Position")))).Magnitude > RequiredDistance then
-		CancelLock()
+	else
+		-- Keep locked target until it becomes invalid (dead, behind wall, or character missing)
+		local LockedCharacter = __index(Environment.Locked, "Character")
+		local LockedHumanoid = LockedCharacter and FindFirstChildOfClass(LockedCharacter, "Humanoid")
+		local LockedPart = LockedCharacter and FindFirstChild(LockedCharacter, LockPart)
+		
+		-- Check if target is still valid
+		local shouldUnlock = false
+		
+		if not LockedCharacter or not LockedPart then
+			shouldUnlock = true
+		elseif Settings.AliveCheck and LockedHumanoid and __index(LockedHumanoid, "Health") <= 0 then
+			shouldUnlock = true
+		elseif Settings.WallCheck and LockedPart then
+			local PartPosition = __index(LockedPart, "Position")
+			local BlacklistTable = GetDescendants(__index(LocalPlayer, "Character"))
+			
+			for _, Value in next, GetDescendants(LockedCharacter) do
+				BlacklistTable[#BlacklistTable + 1] = Value
+			end
+			
+			if #GetPartsObscuringTarget(Camera, {PartPosition}, BlacklistTable) > 0 then
+				shouldUnlock = true
+			end
+		end
+		
+		if shouldUnlock then
+			CancelLock()
+		end
 	end
 end
 
@@ -598,12 +617,16 @@ local Load = function()
 						mousemoverel((LockedPosition.X - GetMouseLocation(UserInputService).X) / Settings.Sensitivity2, (LockedPosition.Y - GetMouseLocation(UserInputService).Y) / Settings.Sensitivity2)
 					end
 				else
-					-- Smooth constant lock for mobile (no tweening/animation)
+					-- Smooth tracking using Sensitivity slider value
 					local currentCFrame = Camera.CFrame
 					local targetCFrame = CFramenew(currentCFrame.Position, LockedPosition_Vector3 + Offset)
 					
-					-- Use Lerp with 0.2 factor for smooth continuous tracking
-					__newindex(Camera, "CFrame", currentCFrame:Lerp(targetCFrame, 0.2))
+					-- Calculate lerp alpha based on Sensitivity slider (higher sensitivity = faster tracking)
+					-- Sensitivity of 0 = instant lock, Sensitivity > 0 = smooth over time
+					local lerpAlpha = Settings.Sensitivity > 0 and (1 / (Settings.Sensitivity * 60)) or 1
+					lerpAlpha = mathclamp(lerpAlpha, 0.05, 1) -- Clamp between 5% and 100%
+					
+					__newindex(Camera, "CFrame", currentCFrame:Lerp(targetCFrame, lerpAlpha))
 					__newindex(UserInputService, "MouseDeltaSensitivity", 0)
 				end
 
