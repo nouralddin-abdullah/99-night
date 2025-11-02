@@ -10,136 +10,130 @@
 local game, workspace = game, workspace
 local getrawmetatable, getmetatable, setmetatable, pcall, getgenv, next, tick = getrawmetatable, getmetatable, setmetatable, pcall, getgenv, next, tick
 
--- Mobile-Compatible Drawing API using ScreenGui
+-- Simplified Mobile Drawing API - More stable
 local function CreateMobileDrawing(drawingType)
 	if drawingType == "Circle" then
-		-- Create a GUI circle for mobile
-		local screenGui = Instance.new("ScreenGui")
-		screenGui.Name = "MobileFOVCircle"
-		screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-		screenGui.DisplayOrder = 999999
-		screenGui.IgnoreGuiInset = true
-		
-		-- Try to protect the GUI
-		pcall(function()
-			if gethui then
-				screenGui.Parent = gethui()
-			elseif syn and syn.protect_gui then
-				syn.protect_gui(screenGui)
-				screenGui.Parent = game:GetService("CoreGui")
-			else
-				screenGui.Parent = game:GetService("CoreGui")
-			end
-		end)
-		
-		local frame = Instance.new("Frame")
-		frame.Name = "Circle"
-		frame.Size = UDim2.fromOffset(180, 180) -- Default radius * 2
-		frame.Position = UDim2.fromOffset(0, 0)
-		frame.AnchorPoint = Vector2.new(0.5, 0.5)
-		frame.BackgroundTransparency = 1
-		frame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-		frame.BorderSizePixel = 0
-		frame.Parent = screenGui
-		
-		-- Create circular appearance
-		local corner = Instance.new("UICorner")
-		corner.CornerRadius = UDim.new(1, 0) -- Full circle
-		corner.Parent = frame
-		
-		-- Create stroke for outline
-		local stroke = Instance.new("UIStroke")
-		stroke.Thickness = 1
-		stroke.Color = Color3.fromRGB(255, 255, 255)
-		stroke.Transparency = 0
-		stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-		stroke.Parent = frame
-		
-		-- Store references
 		local circleObject = {
-			_frame = frame,
-			_stroke = stroke,
-			_screenGui = screenGui,
+			_screenGui = nil,
+			_frame = nil,
+			_stroke = nil,
 			_visible = false,
 			_radius = 90,
 			_thickness = 1,
 			_transparency = 1,
 			_filled = false,
 			_color = Color3.fromRGB(255, 255, 255),
-			_position = Vector2.new(0, 0)
+			_position = Vector2.new(0, 0),
+			_initialized = false
 		}
 		
-		-- Create metatable to handle property getting/setting
+		local function InitializeGUI()
+			if circleObject._initialized then return end
+			
+			pcall(function()
+				local screenGui = Instance.new("ScreenGui")
+				screenGui.Name = "MobileFOVCircle_" .. math.random(1000, 9999)
+				screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+				screenGui.DisplayOrder = 999999
+				screenGui.IgnoreGuiInset = true
+				screenGui.ResetOnSpawn = false
+				
+				if gethui then
+					screenGui.Parent = gethui()
+				elseif syn and syn.protect_gui then
+					syn.protect_gui(screenGui)
+					screenGui.Parent = game:GetService("CoreGui")
+				else
+					screenGui.Parent = game:GetService("CoreGui")
+				end
+				
+				local frame = Instance.new("Frame")
+				frame.Name = "Circle"
+				frame.Size = UDim2.fromOffset(180, 180)
+				frame.Position = UDim2.fromOffset(0, 0)
+				frame.AnchorPoint = Vector2.new(0.5, 0.5)
+				frame.BackgroundTransparency = 1
+				frame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+				frame.BorderSizePixel = 0
+				frame.Parent = screenGui
+				
+				local corner = Instance.new("UICorner")
+				corner.CornerRadius = UDim.new(1, 0)
+				corner.Parent = frame
+				
+				local stroke = Instance.new("UIStroke")
+				stroke.Thickness = 1
+				stroke.Color = Color3.fromRGB(255, 255, 255)
+				stroke.Transparency = 0
+				stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+				stroke.Parent = frame
+				
+				circleObject._screenGui = screenGui
+				circleObject._frame = frame
+				circleObject._stroke = stroke
+				circleObject._initialized = true
+			end)
+		end
+		
 		return setmetatable(circleObject, {
 			__index = function(self, key)
 				if key == "Visible" then
 					return self._visible
-				elseif key == "Radius" then
-					return self._radius
-				elseif key == "Thickness" then
-					return self._thickness
-				elseif key == "Transparency" then
-					return self._transparency
-				elseif key == "Filled" then
-					return self._filled
-				elseif key == "Color" then
-					return self._color
-				elseif key == "Position" then
-					return self._position
-				elseif key == "NumSides" then
-					return 60 -- Ignored for GUI circles
+				elseif key == "Radius" or key == "Thickness" or key == "Transparency" or key == "Filled" or key == "Color" or key == "Position" or key == "NumSides" then
+					return self["_" .. string.lower(key)] or 60
 				elseif key == "Remove" then
 					return function()
-						if self._screenGui then
-							self._screenGui:Destroy()
-						end
+						pcall(function()
+							if self._screenGui then
+								self._screenGui:Destroy()
+							end
+						end)
 					end
 				end
-				return rawget(self, key)
 			end,
 			__newindex = function(self, key, value)
-				if key == "Visible" then
-					self._visible = value
-					self._screenGui.Enabled = value
-				elseif key == "Radius" then
-					self._radius = value
-					local size = value * 2
-					self._frame.Size = UDim2.fromOffset(size, size)
-				elseif key == "Thickness" then
-					self._thickness = value
-					self._stroke.Thickness = value
-				elseif key == "Transparency" then
-					self._transparency = value
-					self._stroke.Transparency = 1 - value
-					if self._filled then
-						self._frame.BackgroundTransparency = 1 - (value * 0.5)
+				pcall(function()
+					if key == "Visible" then
+						self._visible = value
+						if value and not self._initialized then
+							InitializeGUI()
+						end
+						if self._screenGui then
+							self._screenGui.Enabled = value
+						end
+					elseif key == "Radius" then
+						self._radius = value
+						if self._frame then
+							self._frame.Size = UDim2.fromOffset(value * 2, value * 2)
+						end
+					elseif key == "Thickness" then
+						self._thickness = value
+						if self._stroke then
+							self._stroke.Thickness = value
+						end
+					elseif key == "Transparency" then
+						self._transparency = value
+						if self._stroke then
+							self._stroke.Transparency = 1 - value
+						end
+					elseif key == "Color" then
+						self._color = value
+						if self._stroke then
+							self._stroke.Color = value
+						end
+					elseif key == "Position" then
+						self._position = value
+						if self._frame then
+							self._frame.Position = UDim2.fromOffset(value.X, value.Y)
+						end
+					elseif key == "Filled" or key == "NumSides" then
+						-- Ignore these for mobile
 					end
-				elseif key == "Filled" then
-					self._filled = value
-					if value then
-						self._frame.BackgroundTransparency = 1 - (self._transparency * 0.5)
-					else
-						self._frame.BackgroundTransparency = 1
-					end
-				elseif key == "Color" then
-					self._color = value
-					self._stroke.Color = value
-					if self._filled then
-						self._frame.BackgroundColor3 = value
-					end
-				elseif key == "Position" then
-					self._position = value
-					self._frame.Position = UDim2.fromOffset(value.X, value.Y)
-				elseif key == "NumSides" then
-					-- Ignored for GUI circles (always perfectly round)
-				else
-					rawset(self, key, value)
-				end
+				end)
 			end
 		})
 	end
 	
-	-- Fallback for other drawing types
 	return setmetatable({}, {
 		__index = function() return function() end end,
 		__newindex = function() end
@@ -247,10 +241,10 @@ getgenv().ExunysDeveloperAimbot = {
 		OffsetToMoveDirection = false,
 		OffsetIncrement = 15,
 
-		Sensitivity = 0, -- Animation length (in seconds) before fully locking onto target
+		Sensitivity = 0.15, -- Animation length (in seconds) before fully locking onto target - Increased for smoother mobile
 		Sensitivity2 = 3.5, -- mousemoverel Sensitivity
 
-		LockMode = 1, -- 1 = CFrame; 2 = mousemoverel (Force CFrame on mobile)
+		LockMode = 1, -- 1 = CFrame; 2 = mousemoverel
 		LockPart = "Head", -- Body part to lock on
 
 		TriggerKey = isMobileDevice and Enum.UserInputType.Touch or Enum.UserInputType.MouseButton2,
@@ -591,11 +585,21 @@ local Load = function()
 						mousemoverel((LockedPosition.X - GetMouseLocation(UserInputService).X) / Settings.Sensitivity2, (LockedPosition.Y - GetMouseLocation(UserInputService).Y) / Settings.Sensitivity2)
 					end
 				else
+					-- Improved smoothing for mobile
 					if Settings.Sensitivity > 0 then
-						Animation = TweenService:Create(Camera, TweenInfonew(Environment.Settings.Sensitivity, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), {CFrame = CFramenew(Camera.CFrame.Position, LockedPosition_Vector3)})
+						-- Use Exponential easing for smoother mobile experience
+						local tweenInfo = TweenInfonew(
+							Settings.Sensitivity,
+							Enum.EasingStyle.Exponential,
+							Enum.EasingDirection.Out
+						)
+						Animation = TweenService:Create(Camera, tweenInfo, {CFrame = CFramenew(Camera.CFrame.Position, LockedPosition_Vector3 + Offset)})
 						Animation:Play()
 					else
-						__newindex(Camera, "CFrame", CFramenew(Camera.CFrame.Position, LockedPosition_Vector3 + Offset))
+						-- Lerp for instant lock with slight smoothing
+						local currentCFrame = Camera.CFrame
+						local targetCFrame = CFramenew(currentCFrame.Position, LockedPosition_Vector3 + Offset)
+						__newindex(Camera, "CFrame", currentCFrame:Lerp(targetCFrame, 0.5))
 					end
 
 					__newindex(UserInputService, "MouseDeltaSensitivity", 0)
