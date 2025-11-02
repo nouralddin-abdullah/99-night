@@ -27,48 +27,90 @@ local GuiService = game:GetService("GuiService")
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 
+local function GetScreenInfo()
+    local currentCamera = workspace.CurrentCamera
+    if not currentCamera then
+        currentCamera = workspace:FindFirstChildOfClass("Camera")
+    end
+
+    local viewportSize = currentCamera and currentCamera.ViewportSize or Vector2.new(1920, 1080)
+    local screenWidth = viewportSize.X
+    local screenHeight = viewportSize.Y
+
+    -- More aggressive mobile detection
+    local useMobilePrompt = UserInputService.TouchEnabled
+    local isMobile = screenWidth < 600 or screenHeight < 500 or useMobilePrompt
+    local isTablet = not isMobile and (screenWidth >= 600 and screenWidth < 1024)
+    local isDesktop = not isMobile and not isTablet
+
+    return {
+        Width = screenWidth,
+        Height = screenHeight,
+        IsMobile = isMobile,
+        IsTablet = isTablet,
+        IsDesktop = isDesktop,
+        UseMobilePrompt = useMobilePrompt,
+        DragOffsetDesktop = 255,
+        DragOffsetMobile = 150,
+        DesktopWindowHeight = 475,
+        MobileWindowHeight = 275,
+        TabletWindowHeight = 425,
+        WindowWidth = 500,
+    }
+end
+
+local ScreenInfo = GetScreenInfo()
+
+-- Function to update screen info dynamically
+local function RefreshScreenInfo()
+    ScreenInfo = GetScreenInfo()
+    return ScreenInfo
+end
+
 -- Responsive sizing based on device
--- This function calculates UI element sizes based on detected device type
-local function GetResponsiveConfig(screenInfo)
-    if screenInfo.IsMobile then
-        local windowWidth = screenInfo.WindowWidth
-        local windowHeight = screenInfo.MobileWindowHeight
+local function GetResponsiveConfig()
+    if ScreenInfo.IsMobile then
+        -- Mobile: Use percentage-based width with max constraints
+        local windowWidth = math.min(ScreenInfo.Width * 0.85, 400)
+        local windowHeight = math.min(ScreenInfo.Height * 0.7, ScreenInfo.MobileWindowHeight)
 
         return {
             WindowWidth = windowWidth,
             WindowHeight = windowHeight,
             WindowSize = UDim2.new(0, windowWidth, 0, windowHeight),
-            TabContainerWidth = 110,
+            TabContainerWidth = 90,
             HeaderHeight = 45,
             ButtonHeight = 32,
             ToggleHeight = 32,
             SliderHeight = 40,
             DropdownHeight = 32,
             MinimizeCircleSize = 52,
-            FontSizeTitle = 18,
-            FontSizeNormal = 13,
+            FontSizeTitle = 16,
+            FontSizeNormal = 12,
         }
-    elseif screenInfo.IsTablet then
-        local windowWidth = screenInfo.WindowWidth
-        local windowHeight = screenInfo.TabletWindowHeight
+    elseif ScreenInfo.IsTablet then
+        -- Tablet: Medium sizing
+        local windowWidth = math.min(ScreenInfo.Width * 0.75, 550)
+        local windowHeight = math.min(ScreenInfo.Height * 0.75, ScreenInfo.TabletWindowHeight)
 
         return {
             WindowWidth = windowWidth,
             WindowHeight = windowHeight,
             WindowSize = UDim2.new(0, windowWidth, 0, windowHeight),
-            TabContainerWidth = 130,
+            TabContainerWidth = 120,
             HeaderHeight = 45,
             ButtonHeight = 34,
             ToggleHeight = 34,
             SliderHeight = 42,
             DropdownHeight = 34,
             MinimizeCircleSize = 56,
-            FontSizeTitle = 19,
-            FontSizeNormal = 14,
+            FontSizeTitle = 18,
+            FontSizeNormal = 13,
         }
     else
-        local windowWidth = screenInfo.WindowWidth
-        local windowHeight = screenInfo.DesktopWindowHeight
+        -- Desktop: Fixed width with constraints
+        local windowWidth = math.clamp(ScreenInfo.Width * 0.4, 500, 650)
+        local windowHeight = math.clamp(ScreenInfo.Height * 0.65, 400, ScreenInfo.DesktopWindowHeight)
 
         return {
             WindowWidth = windowWidth,
@@ -87,7 +129,9 @@ local function GetResponsiveConfig(screenInfo)
     end
 end
 
--- Configuration (colors and static settings only, responsive sizes are calculated per-instance)
+local ResponsiveConfig = GetResponsiveConfig()
+
+-- Configuration
 local Config = {
     -- Colors
     BackgroundColor = Color3.fromRGB(20, 20, 25),
@@ -98,6 +142,20 @@ local Config = {
     BorderColor = Color3.fromRGB(50, 50, 60),
     SuccessColor = Color3.fromRGB(67, 181, 129),
     ErrorColor = Color3.fromRGB(240, 71, 71),
+    
+    -- Responsive Sizes
+    WindowSize = ResponsiveConfig.WindowSize,
+    TabContainerWidth = ResponsiveConfig.TabContainerWidth,
+    HeaderHeight = ResponsiveConfig.HeaderHeight,
+    ButtonHeight = ResponsiveConfig.ButtonHeight,
+    ToggleHeight = ResponsiveConfig.ToggleHeight,
+    SliderHeight = ResponsiveConfig.SliderHeight,
+    DropdownHeight = ResponsiveConfig.DropdownHeight,
+    MinimizeCircleSize = ResponsiveConfig.MinimizeCircleSize,
+    
+    -- Font Sizes
+    FontSizeTitle = ResponsiveConfig.FontSizeTitle,
+    FontSizeNormal = ResponsiveConfig.FontSizeNormal,
     
     -- Animation
     AnimationSpeed = 0.2,
@@ -141,9 +199,14 @@ local function CreatePadding(parent, all)
 end
 
 local function Tween(object, properties, duration)
-    -- Simple tween like Rayfield (no mobile-specific adjustments)
+    -- Rayfield uses longer durations on mobile for smoother experience
+    local adjustedDuration = duration or Config.AnimationSpeed
+    if ScreenInfo.IsMobile then
+        adjustedDuration = adjustedDuration * 1.2  -- 20% slower on mobile
+    end
+    
     local tweenInfo = TweenInfo.new(
-        duration or Config.AnimationSpeed,
+        adjustedDuration,
         Config.EasingStyle,
         Config.EasingDirection
     )
@@ -256,6 +319,11 @@ function CustomGUI.new(config)
     
     -- Configuration
     self.Title = config.Title or "Universal GUI"
+    self.Size = config.Size or Config.WindowSize
+    -- Center window based on responsive size
+    local xOffset = -ResponsiveConfig.WindowWidth / 2
+    local yOffset = -ResponsiveConfig.WindowHeight / 2
+    self.Position = config.Position or UDim2.new(0.5, xOffset, 0.5, yOffset)
     self.Visible = config.Visible ~= false
     
     -- Storage
@@ -263,7 +331,7 @@ function CustomGUI.new(config)
     self.CurrentTab = nil
     self.Flags = {}
     
-    -- Create ScreenGui first (needed for accurate size detection like Rayfield)
+    -- Create ScreenGui
     self.ScreenGui = Instance.new("ScreenGui")
     self.ScreenGui.Name = "CustomGUI_" .. math.random(1000, 9999)
     self.ScreenGui.ResetOnSpawn = false
@@ -279,49 +347,10 @@ function CustomGUI.new(config)
         self.ScreenGui.Parent = game:GetService("CoreGui")
     end
     
-    -- Wait for ScreenGui to be ready and get accurate size (like Rayfield does)
-    task.wait()
-    
-    -- Now calculate screen info based on actual ScreenGui size (Rayfield method)
-    local minSize = Vector2.new(1024, 768)
-    local useMobileSizing = self.ScreenGui.AbsoluteSize.X < minSize.X and self.ScreenGui.AbsoluteSize.Y < minSize.Y
-    
-    -- useMobilePrompt is separate from useMobileSizing (just like Rayfield)
-    local useMobilePrompt = UserInputService.TouchEnabled
-    
-    -- Build screen info (exactly like Rayfield's logic)
-    local currentScreenInfo = {
-        Width = self.ScreenGui.AbsoluteSize.X,
-        Height = self.ScreenGui.AbsoluteSize.Y,
-        IsMobile = useMobileSizing,
-        IsTablet = not useMobileSizing and (self.ScreenGui.AbsoluteSize.X >= 768 and self.ScreenGui.AbsoluteSize.X < 1024),
-        IsDesktop = not useMobileSizing and self.ScreenGui.AbsoluteSize.X >= 1024,
-        UseMobilePrompt = useMobilePrompt,  -- Separate from IsMobile, just like Rayfield
-        DragOffsetDesktop = 255,
-        DragOffsetMobile = 150,
-        DesktopWindowHeight = 475,
-        MobileWindowHeight = 275,
-        TabletWindowHeight = 425,
-        WindowWidth = 500,
-    }
-    
-    -- Calculate responsive config based on actual device detection
-    local currentResponsiveConfig = GetResponsiveConfig(currentScreenInfo)
-    
-    -- Store for element creation
-    self.ResponsiveConfig = currentResponsiveConfig
-    self.ScreenInfo = currentScreenInfo
-    
-    -- Set size and position based on responsive config
-    self.Size = config.Size or UDim2.new(0, currentResponsiveConfig.WindowWidth, 0, currentResponsiveConfig.WindowHeight)
-    local xOffset = -currentResponsiveConfig.WindowWidth / 2
-    local yOffset = -currentResponsiveConfig.WindowHeight / 2
-    self.Position = config.Position or UDim2.new(0.5, xOffset, 0.5, yOffset)
-    
     -- Main Window
     self.MainWindow = Instance.new("Frame")
     self.MainWindow.Name = "MainWindow"
-    self.MainWindow.Size = self.Size
+    self.MainWindow.Size = Config.WindowSize  -- Use Config.WindowSize instead of self.Size
     self.MainWindow.Position = self.Position
     self.MainWindow.BackgroundColor3 = Config.BackgroundColor
     self.MainWindow.BorderSizePixel = 0
@@ -329,6 +358,24 @@ function CustomGUI.new(config)
     self.MainWindow.Parent = self.ScreenGui
     CreateCorner(self.MainWindow)
     CreateStroke(self.MainWindow)
+    
+    -- Add viewport resize handler
+    local camera = workspace.CurrentCamera
+    if camera then
+        camera:GetPropertyChangedSignal("ViewportSize"):Connect(function()
+            -- Refresh screen info and responsive config
+            RefreshScreenInfo()
+            local newConfig = GetResponsiveConfig()
+            
+            -- Update window size
+            self.MainWindow.Size = UDim2.new(0, newConfig.WindowWidth, 0, newConfig.WindowHeight)
+            
+            -- Re-center the window
+            local xOffset = -newConfig.WindowWidth / 2
+            local yOffset = -newConfig.WindowHeight / 2
+            self.MainWindow.Position = UDim2.new(0.5, xOffset, 0.5, yOffset)
+        end)
+    end
     
     -- Shadow Effect (Disabled on mobile for performance like Rayfield)
     local shadow = Instance.new("ImageLabel")
@@ -338,17 +385,17 @@ function CustomGUI.new(config)
     shadow.BackgroundTransparency = 1
     shadow.Image = "rbxassetid://6015897843"
     shadow.ImageColor3 = Color3.fromRGB(0, 0, 0)
-    shadow.ImageTransparency = currentScreenInfo.IsMobile and 1 or 0.7  -- Hide shadow on mobile
+    shadow.ImageTransparency = ScreenInfo.IsMobile and 1 or 0.7  -- Hide shadow on mobile
     shadow.ScaleType = Enum.ScaleType.Slice
     shadow.SliceCenter = Rect.new(100, 100, 100, 100)
     shadow.ZIndex = 0
-    shadow.Visible = not currentScreenInfo.IsMobile  -- Disable shadows on mobile for better performance
+    shadow.Visible = not ScreenInfo.IsMobile  -- Disable shadows on mobile for better performance
     shadow.Parent = self.MainWindow
     
     -- Header
     self.Header = Instance.new("Frame")
     self.Header.Name = "Header"
-    self.Header.Size = UDim2.new(1, 0, 0, currentResponsiveConfig.HeaderHeight)
+    self.Header.Size = UDim2.new(1, 0, 0, Config.HeaderHeight)
     self.Header.BackgroundColor3 = Config.SecondaryColor
     self.Header.BorderSizePixel = 0
     self.Header.Parent = self.MainWindow
@@ -362,7 +409,7 @@ function CustomGUI.new(config)
     self.TitleLabel.BackgroundTransparency = 1
     self.TitleLabel.Text = self.Title
     self.TitleLabel.TextColor3 = Config.TextColor
-    self.TitleLabel.TextSize = currentResponsiveConfig.FontSizeTitle
+    self.TitleLabel.TextSize = Config.FontSizeTitle
     self.TitleLabel.Font = Config.TitleFont
     self.TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
     self.TitleLabel.Parent = self.Header
@@ -376,7 +423,7 @@ function CustomGUI.new(config)
     self.MinimizeButton.BorderSizePixel = 0
     self.MinimizeButton.Text = "─"
     self.MinimizeButton.TextColor3 = Config.TextColor
-    self.MinimizeButton.TextSize = currentResponsiveConfig.FontSizeTitle
+    self.MinimizeButton.TextSize = Config.FontSizeTitle
     self.MinimizeButton.Font = Config.TitleFont
     self.MinimizeButton.Parent = self.Header
     CreateCorner(self.MinimizeButton, UDim.new(0, 6))
@@ -390,7 +437,7 @@ function CustomGUI.new(config)
     self.CloseButton.BorderSizePixel = 0
     self.CloseButton.Text = "✕"
     self.CloseButton.TextColor3 = Config.TextColor
-    self.CloseButton.TextSize = currentResponsiveConfig.FontSizeTitle
+    self.CloseButton.TextSize = Config.FontSizeTitle
     self.CloseButton.Font = Config.TitleFont
     self.CloseButton.Parent = self.Header
     CreateCorner(self.CloseButton, UDim.new(0, 6))
@@ -418,8 +465,8 @@ function CustomGUI.new(config)
     -- Minimize Circle (Hidden by default) - Mobile Prompt like Rayfield
     self.MinimizeCircle = Instance.new("Frame")
     self.MinimizeCircle.Name = "MinimizeCircle"
-    self.MinimizeCircle.Size = UDim2.new(0, currentResponsiveConfig.MinimizeCircleSize, 0, currentResponsiveConfig.MinimizeCircleSize)
-    self.MinimizeCircle.Position = UDim2.new(1, -(currentResponsiveConfig.MinimizeCircleSize + 20), 0, 20)
+    self.MinimizeCircle.Size = UDim2.new(0, Config.MinimizeCircleSize, 0, Config.MinimizeCircleSize)
+    self.MinimizeCircle.Position = UDim2.new(1, -(Config.MinimizeCircleSize + 20), 0, 20)
     self.MinimizeCircle.BackgroundColor3 = Config.AccentColor
     self.MinimizeCircle.BorderSizePixel = 0
     self.MinimizeCircle.Visible = false
@@ -428,14 +475,14 @@ function CustomGUI.new(config)
     CreateStroke(self.MinimizeCircle, Config.BorderColor, 2)
     
     -- Mobile-specific prompt text (like Rayfield's MPrompt)
-    if currentScreenInfo.UseMobilePrompt then
+    if ScreenInfo.UseMobilePrompt then
         local PromptLabel = Instance.new("TextLabel")
         PromptLabel.Name = "PromptLabel"
         PromptLabel.Size = UDim2.new(1, 0, 1, 0)
         PromptLabel.BackgroundTransparency = 1
         PromptLabel.Text = "Show"
         PromptLabel.TextColor3 = Config.TextColor
-        PromptLabel.TextSize = currentResponsiveConfig.FontSizeNormal
+        PromptLabel.TextSize = Config.FontSizeNormal
         PromptLabel.Font = Config.TitleFont
         PromptLabel.Parent = self.MinimizeCircle
     end
@@ -492,8 +539,8 @@ function CustomGUI.new(config)
     -- Tab Container
     self.TabContainer = Instance.new("Frame")
     self.TabContainer.Name = "TabContainer"
-    self.TabContainer.Size = UDim2.new(0, currentResponsiveConfig.TabContainerWidth, 1, -(currentResponsiveConfig.HeaderHeight + 10))
-    self.TabContainer.Position = UDim2.new(0, 10, 0, currentResponsiveConfig.HeaderHeight + 5)
+    self.TabContainer.Size = UDim2.new(0, Config.TabContainerWidth, 1, -(Config.HeaderHeight + 10))
+    self.TabContainer.Position = UDim2.new(0, 10, 0, Config.HeaderHeight + 5)
     self.TabContainer.BackgroundTransparency = 1
     self.TabContainer.Parent = self.MainWindow
     
@@ -505,11 +552,11 @@ function CustomGUI.new(config)
     -- Content Container
     self.ContentContainer = Instance.new("ScrollingFrame")
     self.ContentContainer.Name = "ContentContainer"
-    self.ContentContainer.Size = UDim2.new(1, -(currentResponsiveConfig.TabContainerWidth + 30), 1, -(currentResponsiveConfig.HeaderHeight + 20))
-    self.ContentContainer.Position = UDim2.new(0, currentResponsiveConfig.TabContainerWidth + 20, 0, currentResponsiveConfig.HeaderHeight + 10)
+    self.ContentContainer.Size = UDim2.new(1, -(Config.TabContainerWidth + 30), 1, -(Config.HeaderHeight + 20))
+    self.ContentContainer.Position = UDim2.new(0, Config.TabContainerWidth + 20, 0, Config.HeaderHeight + 10)
     self.ContentContainer.BackgroundTransparency = 1
     self.ContentContainer.BorderSizePixel = 0
-    self.ContentContainer.ScrollBarThickness = currentScreenInfo.IsMobile and 3 or 4
+    self.ContentContainer.ScrollBarThickness = ScreenInfo.IsMobile and 3 or 4
     self.ContentContainer.ScrollBarImageColor3 = Config.AccentColor
     self.ContentContainer.CanvasSize = UDim2.new(0, 0, 0, 0)
     self.ContentContainer.AutomaticCanvasSize = Enum.AutomaticSize.Y
@@ -525,7 +572,7 @@ function CustomGUI.new(config)
     local DragBar = Instance.new("Frame")
     DragBar.Name = "DragBar"
     DragBar.Size = UDim2.new(0, 0, 0, 0)
-    DragBar.Position = UDim2.new(0.5, 0, 1, currentScreenInfo.IsMobile and 8 or 12)
+    DragBar.Position = UDim2.new(0.5, 0, 1, ScreenInfo.IsMobile and 8 or 12)
     DragBar.AnchorPoint = Vector2.new(0.5, 0)
     DragBar.BackgroundTransparency = 1
     DragBar.Parent = self.ScreenGui
@@ -656,7 +703,7 @@ function CustomGUI:CreateTab(config)
     Tab.Button.BorderSizePixel = 0
     Tab.Button.Text = Tab.Icon .. " " .. Tab.Name
     Tab.Button.TextColor3 = Config.SubTextColor
-    Tab.Button.TextSize = self.ResponsiveConfig.FontSizeNormal
+    Tab.Button.TextSize = Config.FontSizeNormal
     Tab.Button.Font = Config.MainFont
     Tab.Button.TextXAlignment = Enum.TextXAlignment.Left
     Tab.Button.Parent = self.TabContainer
@@ -776,7 +823,7 @@ function CustomGUI:_CreateSection(name, tab)
     Label.BackgroundTransparency = 1
     Label.Text = "━━ " .. name .. " ━━"
     Label.TextColor3 = Config.AccentColor
-    Label.TextSize = self.ResponsiveConfig.FontSizeNormal
+    Label.TextSize = Config.FontSizeNormal
     Label.Font = Config.TitleFont
     Label.TextXAlignment = Enum.TextXAlignment.Left
     Label.Parent = Section
@@ -792,7 +839,7 @@ function CustomGUI:_CreateButton(config, tab)
     
     local ButtonFrame = Instance.new("Frame")
     ButtonFrame.Name = "Button_" .. Button.Name
-    ButtonFrame.Size = UDim2.new(1, 0, 0, self.ResponsiveConfig.ButtonHeight)
+    ButtonFrame.Size = UDim2.new(1, 0, 0, Config.ButtonHeight)
     ButtonFrame.BackgroundColor3 = Config.SecondaryColor
     ButtonFrame.BorderSizePixel = 0
     ButtonFrame.Parent = tab.Container
@@ -810,7 +857,7 @@ function CustomGUI:_CreateButton(config, tab)
     ButtonLabel.BackgroundTransparency = 1
     ButtonLabel.Text = Button.Name
     ButtonLabel.TextColor3 = Config.TextColor
-    ButtonLabel.TextSize = self.ResponsiveConfig.FontSizeNormal
+    ButtonLabel.TextSize = Config.FontSizeNormal
     ButtonLabel.Font = Config.MainFont
     ButtonLabel.TextXAlignment = Enum.TextXAlignment.Left
     ButtonLabel.Parent = ButtonFrame
@@ -818,7 +865,7 @@ function CustomGUI:_CreateButton(config, tab)
     -- Rayfield-style button interaction with touch support
     ButtonClick.MouseButton1Click:Connect(function()
         Tween(ButtonFrame, {BackgroundColor3 = Config.AccentColor})
-        task.wait(self.ScreenInfo.IsMobile and 0.15 or 0.1)  -- Longer feedback on mobile
+        task.wait(ScreenInfo.IsMobile and 0.15 or 0.1)  -- Longer feedback on mobile
         Tween(ButtonFrame, {BackgroundColor3 = Config.SecondaryColor})
         
         pcall(function()
@@ -827,7 +874,7 @@ function CustomGUI:_CreateButton(config, tab)
     end)
     
     -- Hover effects disabled on mobile (touch devices don't have hover)
-    if not self.ScreenInfo.IsMobile then
+    if not ScreenInfo.IsMobile then
         ButtonClick.MouseEnter:Connect(function()
             Tween(ButtonFrame, {BackgroundColor3 = Config.BorderColor})
         end)
@@ -850,7 +897,7 @@ function CustomGUI:_CreateToggle(config, tab)
     
     local ToggleFrame = Instance.new("Frame")
     ToggleFrame.Name = "Toggle_" .. Toggle.Name
-    ToggleFrame.Size = UDim2.new(1, 0, 0, self.ResponsiveConfig.ToggleHeight)
+    ToggleFrame.Size = UDim2.new(1, 0, 0, Config.ToggleHeight)
     ToggleFrame.BackgroundColor3 = Config.SecondaryColor
     ToggleFrame.BorderSizePixel = 0
     ToggleFrame.Parent = tab.Container
@@ -868,7 +915,7 @@ function CustomGUI:_CreateToggle(config, tab)
     ToggleLabel.BackgroundTransparency = 1
     ToggleLabel.Text = Toggle.Name
     ToggleLabel.TextColor3 = Config.TextColor
-    ToggleLabel.TextSize = self.ResponsiveConfig.FontSizeNormal
+    ToggleLabel.TextSize = 14
     ToggleLabel.Font = Config.MainFont
     ToggleLabel.TextXAlignment = Enum.TextXAlignment.Left
     ToggleLabel.Parent = ToggleFrame
@@ -947,7 +994,7 @@ function CustomGUI:_CreateSlider(config, tab)
     
     local SliderFrame = Instance.new("Frame")
     SliderFrame.Name = "Slider_" .. Slider.Name
-    SliderFrame.Size = UDim2.new(1, 0, 0, self.ResponsiveConfig.SliderHeight)
+    SliderFrame.Size = UDim2.new(1, 0, 0, Config.SliderHeight)
     SliderFrame.BackgroundColor3 = Config.SecondaryColor
     SliderFrame.BorderSizePixel = 0
     SliderFrame.Parent = tab.Container
@@ -959,7 +1006,7 @@ function CustomGUI:_CreateSlider(config, tab)
     SliderLabel.BackgroundTransparency = 1
     SliderLabel.Text = Slider.Name
     SliderLabel.TextColor3 = Config.TextColor
-    SliderLabel.TextSize = self.ResponsiveConfig.FontSizeNormal
+    SliderLabel.TextSize = 14
     SliderLabel.Font = Config.MainFont
     SliderLabel.TextXAlignment = Enum.TextXAlignment.Left
     SliderLabel.Parent = SliderFrame
@@ -970,7 +1017,7 @@ function CustomGUI:_CreateSlider(config, tab)
     ValueLabel.BackgroundTransparency = 1
     ValueLabel.Text = tostring(Slider.CurrentValue)
     ValueLabel.TextColor3 = Config.AccentColor
-    ValueLabel.TextSize = self.ResponsiveConfig.FontSizeNormal
+    ValueLabel.TextSize = 14
     ValueLabel.Font = Config.TitleFont
     ValueLabel.TextXAlignment = Enum.TextXAlignment.Right
     ValueLabel.Parent = SliderFrame
@@ -1107,7 +1154,7 @@ function CustomGUI:_CreateDropdown(config, tab)
     
     local DropdownFrame = Instance.new("Frame")
     DropdownFrame.Name = "Dropdown_" .. Dropdown.Name
-    DropdownFrame.Size = UDim2.new(1, 0, 0, self.ResponsiveConfig.DropdownHeight)
+    DropdownFrame.Size = UDim2.new(1, 0, 0, Config.DropdownHeight)
     DropdownFrame.BackgroundColor3 = Config.SecondaryColor
     DropdownFrame.BorderSizePixel = 0
     DropdownFrame.Parent = tab.Container
@@ -1115,7 +1162,7 @@ function CustomGUI:_CreateDropdown(config, tab)
     CreateCorner(DropdownFrame)
     
     local DropdownButton = Instance.new("TextButton")
-    DropdownButton.Size = UDim2.new(1, 0, 0, self.ResponsiveConfig.DropdownHeight)
+    DropdownButton.Size = UDim2.new(1, 0, 0, Config.DropdownHeight)
     DropdownButton.BackgroundTransparency = 1
     DropdownButton.Text = ""
     DropdownButton.Parent = DropdownFrame
@@ -1126,18 +1173,18 @@ function CustomGUI:_CreateDropdown(config, tab)
     DropdownLabel.BackgroundTransparency = 1
     DropdownLabel.Text = Dropdown.Name
     DropdownLabel.TextColor3 = Config.TextColor
-    DropdownLabel.TextSize = self.ResponsiveConfig.FontSizeNormal
+    DropdownLabel.TextSize = 14
     DropdownLabel.Font = Config.MainFont
     DropdownLabel.TextXAlignment = Enum.TextXAlignment.Left
     DropdownLabel.Parent = DropdownFrame
     
     local DropdownValue = Instance.new("TextLabel")
-    DropdownValue.Size = UDim2.new(0, 200, 0, self.ResponsiveConfig.DropdownHeight)
+    DropdownValue.Size = UDim2.new(0, 200, 0, Config.DropdownHeight)
     DropdownValue.Position = UDim2.new(1, -240, 0, 0)
     DropdownValue.BackgroundTransparency = 1
     DropdownValue.Text = Dropdown.Multi and "None" or (Dropdown.Default or "Select...")
     DropdownValue.TextColor3 = Config.SubTextColor
-    DropdownValue.TextSize = self.ResponsiveConfig.FontSizeNormal
+    DropdownValue.TextSize = 13
     DropdownValue.Font = Config.MainFont
     DropdownValue.TextXAlignment = Enum.TextXAlignment.Right
     DropdownValue.TextTruncate = Enum.TextTruncate.AtEnd
@@ -1149,7 +1196,7 @@ function CustomGUI:_CreateDropdown(config, tab)
     DropdownArrow.BackgroundTransparency = 1
     DropdownArrow.Text = "▼"
     DropdownArrow.TextColor3 = Config.SubTextColor
-    DropdownArrow.TextSize = self.ResponsiveConfig.FontSizeNormal
+    DropdownArrow.TextSize = 12
     DropdownArrow.Font = Config.MainFont
     DropdownArrow.Parent = DropdownFrame
     
@@ -1212,7 +1259,7 @@ function CustomGUI:_CreateDropdown(config, tab)
         OptionLabel.BackgroundTransparency = 1
         OptionLabel.Text = option
         OptionLabel.TextColor3 = Config.TextColor
-        OptionLabel.TextSize = self.ResponsiveConfig.FontSizeNormal
+        OptionLabel.TextSize = 13
         OptionLabel.Font = Config.MainFont
         OptionLabel.TextXAlignment = Enum.TextXAlignment.Left
         OptionLabel.Parent = OptionButton
@@ -1233,7 +1280,7 @@ function CustomGUI:_CreateDropdown(config, tab)
             Checkmark.BackgroundTransparency = 1
             Checkmark.Text = "✓"
             Checkmark.TextColor3 = Config.AccentColor
-            Checkmark.TextSize = self.ResponsiveConfig.FontSizeNormal
+            Checkmark.TextSize = 14
             Checkmark.Font = Config.TitleFont
             Checkmark.Visible = false
             Checkmark.Parent = Checkbox
@@ -1331,7 +1378,7 @@ function CustomGUI:_CreateDropdown(config, tab)
             OptionLabel.BackgroundTransparency = 1
             OptionLabel.Text = option
             OptionLabel.TextColor3 = Config.TextColor
-            OptionLabel.TextSize = self.ResponsiveConfig.FontSizeNormal
+            OptionLabel.TextSize = 13
             OptionLabel.Font = Config.MainFont
             OptionLabel.TextXAlignment = Enum.TextXAlignment.Left
             OptionLabel.Parent = OptionButton
@@ -1352,7 +1399,7 @@ function CustomGUI:_CreateDropdown(config, tab)
                 Checkmark.BackgroundTransparency = 1
                 Checkmark.Text = "✓"
                 Checkmark.TextColor3 = Config.AccentColor
-                Checkmark.TextSize = self.ResponsiveConfig.FontSizeNormal
+                Checkmark.TextSize = 14
                 Checkmark.Font = Config.TitleFont
                 Checkmark.Visible = false
                 Checkmark.Parent = Checkbox
@@ -1446,7 +1493,7 @@ function CustomGUI:_CreateLabel(text, tab)
     Label.BackgroundTransparency = 1
     Label.Text = text
     Label.TextColor3 = Config.TextColor
-    Label.TextSize = self.ResponsiveConfig.FontSizeNormal
+    Label.TextSize = 13
     Label.Font = Config.MainFont
     Label.TextXAlignment = Enum.TextXAlignment.Left
     Label.TextWrapped = true
@@ -1477,7 +1524,7 @@ function CustomGUI:_CreateParagraph(config, tab)
     TitleLabel.BackgroundTransparency = 1
     TitleLabel.Text = Paragraph.Title
     TitleLabel.TextColor3 = Config.AccentColor
-    TitleLabel.TextSize = self.ResponsiveConfig.FontSizeNormal
+    TitleLabel.TextSize = 14
     TitleLabel.Font = Config.TitleFont
     TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
     TitleLabel.Parent = ParagraphFrame
@@ -1488,7 +1535,7 @@ function CustomGUI:_CreateParagraph(config, tab)
     ContentLabel.BackgroundTransparency = 1
     ContentLabel.Text = Paragraph.Content
     ContentLabel.TextColor3 = Config.SubTextColor
-    ContentLabel.TextSize = self.ResponsiveConfig.FontSizeNormal
+    ContentLabel.TextSize = 13
     ContentLabel.Font = Config.MainFont
     ContentLabel.TextXAlignment = Enum.TextXAlignment.Left
     ContentLabel.TextYAlignment = Enum.TextYAlignment.Top
@@ -1522,7 +1569,7 @@ function CustomGUI:_CreateTextBox(config, tab)
     TextBoxLabel.BackgroundTransparency = 1
     TextBoxLabel.Text = TextBox.Name
     TextBoxLabel.TextColor3 = Config.TextColor
-    TextBoxLabel.TextSize = self.ResponsiveConfig.FontSizeNormal
+    TextBoxLabel.TextSize = 14
     TextBoxLabel.Font = Config.MainFont
     TextBoxLabel.TextXAlignment = Enum.TextXAlignment.Left
     TextBoxLabel.Parent = TextBoxFrame
@@ -1536,7 +1583,7 @@ function CustomGUI:_CreateTextBox(config, tab)
     Input.PlaceholderColor3 = Config.SubTextColor
     Input.Text = TextBox.Default
     Input.TextColor3 = Config.TextColor
-    Input.TextSize = self.ResponsiveConfig.FontSizeNormal
+    Input.TextSize = 13
     Input.Font = Config.MainFont
     -- ClearButtonMode REMOVED - causes issues in some executors
     Input.Parent = TextBoxFrame
@@ -1572,7 +1619,7 @@ function CustomGUI:_CreateColorPicker(config, tab)
     
     local ColorFrame = Instance.new("Frame")
     ColorFrame.Name = "ColorPicker_" .. ColorPicker.Name
-    ColorFrame.Size = UDim2.new(1, 0, 0, self.ResponsiveConfig.ButtonHeight)
+    ColorFrame.Size = UDim2.new(1, 0, 0, Config.ButtonHeight)
     ColorFrame.BackgroundColor3 = Config.SecondaryColor
     ColorFrame.BorderSizePixel = 0
     ColorFrame.Parent = tab.Container
@@ -1584,7 +1631,7 @@ function CustomGUI:_CreateColorPicker(config, tab)
     ColorLabel.BackgroundTransparency = 1
     ColorLabel.Text = ColorPicker.Name
     ColorLabel.TextColor3 = Config.TextColor
-    ColorLabel.TextSize = self.ResponsiveConfig.FontSizeNormal
+    ColorLabel.TextSize = 14
     ColorLabel.Font = Config.MainFont
     ColorLabel.TextXAlignment = Enum.TextXAlignment.Left
     ColorLabel.Parent = ColorFrame
