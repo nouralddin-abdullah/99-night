@@ -10,146 +10,163 @@
 local game, workspace = game, workspace
 local getrawmetatable, getmetatable, setmetatable, pcall, getgenv, next, tick = getrawmetatable, getmetatable, setmetatable, pcall, getgenv, next, tick
 
--- Refactored Mobile Drawing API - Immediate initialization
-local function CreateMobileDrawing(drawingType)
-	if drawingType == "Circle" then
-		-- Initialize GUI immediately
-		local screenGui, frame, stroke
-		
-		pcall(function()
-			screenGui = Instance.new("ScreenGui")
-			screenGui.Name = "MobileFOVCircle_" .. math.random(1000, 9999)
-			screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-			screenGui.DisplayOrder = 999999
-			screenGui.IgnoreGuiInset = true
-			screenGui.ResetOnSpawn = false
-			screenGui.Enabled = true
-			
-			if gethui then
-				screenGui.Parent = gethui()
-			elseif syn and syn.protect_gui then
-				syn.protect_gui(screenGui)
-				screenGui.Parent = game:GetService("CoreGui")
-			else
-				screenGui.Parent = game:GetService("CoreGui")
-			end
-			
-			frame = Instance.new("Frame")
-			frame.Name = "Circle"
-			frame.Size = UDim2.fromOffset(180, 180)
-			frame.Position = UDim2.fromOffset(0, 0)
-			frame.AnchorPoint = Vector2.new(0.5, 0.5)
-			frame.BackgroundTransparency = 1
-			frame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-			frame.BorderSizePixel = 0
-			frame.Parent = screenGui
-			
-			local corner = Instance.new("UICorner")
-			corner.CornerRadius = UDim.new(1, 0)
-			corner.Parent = frame
-			
-			stroke = Instance.new("UIStroke")
-			stroke.Thickness = 1
-			stroke.Color = Color3.fromRGB(255, 255, 255)
-			stroke.Transparency = 0
-			stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-			stroke.Parent = frame
-		end)
-		
-		local circleObject = {
-			_screenGui = screenGui,
-			_frame = frame,
-			_stroke = stroke,
-			_visible = true,
-			_radius = 90,
-			_thickness = 1,
-			_transparency = 1,
-			_color = Color3.fromRGB(255, 255, 255),
-			_position = Vector2.new(0, 0)
-		}
-		
-		return setmetatable(circleObject, {
-			__index = function(self, key)
-				if key == "Visible" then
-					return self._visible
-				elseif key == "Radius" then
-					return self._radius
-				elseif key == "Thickness" then
-					return self._thickness
-				elseif key == "Transparency" then
-					return self._transparency
-				elseif key == "Color" then
-					return self._color
-				elseif key == "Position" then
-					return self._position
-				elseif key == "NumSides" or key == "Filled" then
-					return 60 -- Default value
-				elseif key == "Remove" then
-					return function()
-						pcall(function()
-							if self._screenGui then
-								self._screenGui:Destroy()
-							end
-						end)
-					end
-				end
-			end,
-			__newindex = function(self, key, value)
-				if key == "Visible" then
-					self._visible = value
-					pcall(function()
-						if self._screenGui then
-							self._screenGui.Enabled = value
-						end
-					end)
-				elseif key == "Radius" then
-					self._radius = value
-					pcall(function()
-						if self._frame then
-							self._frame.Size = UDim2.fromOffset(value * 2, value * 2)
-						end
-					end)
-				elseif key == "Thickness" then
-					self._thickness = value
-					pcall(function()
-						if self._stroke then
-							self._stroke.Thickness = value
-						end
-					end)
-				elseif key == "Transparency" then
-					self._transparency = value
-					pcall(function()
-						if self._stroke then
-							self._stroke.Transparency = 1 - value
-						end
-					end)
-				elseif key == "Color" then
-					self._color = value
-					pcall(function()
-						if self._stroke then
-							self._stroke.Color = value
-						end
-					end)
-				elseif key == "Position" then
-					self._position = value
-					pcall(function()
-						if self._frame then
-							self._frame.Position = UDim2.fromOffset(value.X, value.Y)
-						end
-					end)
-				end
-			end
-		})
+local PlayersService = game:GetService("Players")
+local CoreGuiService = game:GetService("CoreGui")
+
+local sharedMobileGui
+
+local function ensureMobileUI()
+	if sharedMobileGui and sharedMobileGui.Parent then
+		return sharedMobileGui
 	end
-	
-	return setmetatable({}, {
-		__index = function() return function() end end,
-		__newindex = function() end
-	})
+
+	local parent
+
+	if gethui then
+		parent = gethui()
+	else
+		local localPlayer = PlayersService.LocalPlayer or PlayersService.PlayerAdded:Wait()
+		local playerGui = localPlayer and localPlayer:FindFirstChildOfClass("PlayerGui")
+		parent = playerGui or CoreGuiService
+	end
+
+	if parent:FindFirstChild("ExunysMobileAimbotUI") then
+		sharedMobileGui = parent:FindFirstChild("ExunysMobileAimbotUI")
+		return sharedMobileGui
+	end
+
+	sharedMobileGui = Instance.new("ScreenGui")
+	sharedMobileGui.Name = "ExunysMobileAimbotUI"
+	sharedMobileGui.ResetOnSpawn = false
+	sharedMobileGui.ZIndexBehavior = Enum.ZIndexBehavior.Global
+	sharedMobileGui.IgnoreGuiInset = true
+	sharedMobileGui.DisplayOrder = 99999
+
+	if syn and syn.protect_gui then
+		pcall(syn.protect_gui, sharedMobileGui)
+	end
+
+	sharedMobileGui.Parent = parent
+
+	return sharedMobileGui
 end
 
--- Use native Drawing API if available, otherwise use mobile fallback
-local Drawingnew = Drawing and Drawing.new or CreateMobileDrawing
+local function createFallbackCircle(nameSuffix, zIndex)
+	local guiParent = ensureMobileUI()
+
+	local frame = Instance.new("Frame")
+	frame.Name = "FOVCircle_" .. nameSuffix
+	frame.AnchorPoint = Vector2.new(0.5, 0.5)
+	frame.Position = UDim2.fromOffset(0, 0)
+	frame.Size = UDim2.fromOffset(0, 0)
+	frame.BackgroundTransparency = 1
+	frame.Visible = false
+	frame.ZIndex = zIndex or 200
+	frame.Parent = guiParent
+
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(1, 0)
+	corner.Parent = frame
+
+	local stroke = Instance.new("UIStroke")
+	stroke.Thickness = 1
+	stroke.Color = Color3.fromRGB(255, 255, 255)
+	stroke.Transparency = 0
+	stroke.Parent = frame
+
+	local state = {
+		Visible = false,
+		Position = Vector2.new(0, 0),
+		Radius = 0,
+		Thickness = 1,
+		Transparency = 1,
+		Color = Color3.fromRGB(255, 255, 255),
+		Filled = false
+	}
+
+	local function applyState(key)
+		if key == "Visible" then
+			frame.Visible = state.Visible
+		elseif key == "Position" then
+			frame.Position = UDim2.fromOffset(state.Position.X, state.Position.Y)
+		elseif key == "Radius" then
+			local size = math.max(0, state.Radius * 2)
+			frame.Size = UDim2.fromOffset(size, size)
+		elseif key == "Thickness" then
+			stroke.Thickness = math.max(1, state.Thickness)
+		elseif key == "Transparency" then
+			local alpha = math.clamp(state.Transparency, 0, 1)
+			stroke.Transparency = 1 - alpha
+			if state.Filled then
+				frame.BackgroundTransparency = 1 - alpha
+			else
+				frame.BackgroundTransparency = 1
+			end
+		elseif key == "Color" then
+			stroke.Color = state.Color
+			if state.Filled then
+				frame.BackgroundColor3 = state.Color
+			end
+		elseif key == "Filled" then
+			if state.Filled then
+				frame.BackgroundColor3 = state.Color
+				frame.BackgroundTransparency = 1 - math.clamp(state.Transparency, 0, 1)
+			else
+				frame.BackgroundTransparency = 1
+			end
+		end
+	end
+
+	local proxy = {}
+
+	local metatable = {
+		__index = function(_, key)
+			if key == "Remove" then
+				return function()
+					frame:Destroy()
+				end
+			elseif key == "__FRAME" then
+				return frame
+			elseif key == "__STROKE" then
+				return stroke
+			elseif key == "__STATE" then
+				return state
+			end
+
+			return state[key]
+		end,
+
+		__newindex = function(_, key, value)
+			state[key] = value
+			applyState(key)
+		end
+	}
+
+	return setmetatable(proxy, metatable)
+end
+
+local circleCounter = 0
+
+local Drawingnew
+
+if Drawing and Drawing.new then
+	Drawingnew = Drawing.new
+else
+	Drawingnew = function(objectType)
+		circleCounter += 1
+		if objectType == "Circle" then
+			return createFallbackCircle(tostring(circleCounter), 200 + circleCounter)
+		end
+
+		-- Fallback dummy object for unsupported Drawing types
+		return setmetatable({}, {
+			__index = function()
+				return function() end
+			end,
+			__newindex = function() end
+		})
+	end
+end
 
 local Vector2new, Vector3zero, CFramenew, Color3fromRGB, Color3fromHSV, TweenInfonew = Vector2.new, Vector3.zero, CFrame.new, Color3.fromRGB, Color3.fromHSV, TweenInfo.new
 local getupvalue, mousemoverel, tablefind, tableremove, stringlower, stringsub, mathclamp = debug.getupvalue, mousemoverel or (Input and Input.MouseMove), table.find, table.remove, string.lower, string.sub, math.clamp
@@ -196,10 +213,6 @@ local GetPlayers = __index(Players, "GetPlayers")
 
 local RequiredDistance, Typing, Running, ServiceConnections, Animation, OriginalSensitivity = 2000, false, false, {}
 local Connect, Disconnect = __index(game, "DescendantAdded").Connect
-
--- Mobile Detection
-local isMobileDevice = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
-local MobileTargetButton = nil
 
 --[[
 local Degrade = false
@@ -249,14 +262,14 @@ getgenv().ExunysDeveloperAimbot = {
 		OffsetToMoveDirection = false,
 		OffsetIncrement = 15,
 
-		Sensitivity = 0.15, -- Animation length (in seconds) before fully locking onto target - Increased for smoother mobile
+		Sensitivity = 0, -- Animation length (in seconds) before fully locking onto target
 		Sensitivity2 = 3.5, -- mousemoverel Sensitivity
 
 		LockMode = 1, -- 1 = CFrame; 2 = mousemoverel
 		LockPart = "Head", -- Body part to lock on
 
-		TriggerKey = isMobileDevice and Enum.UserInputType.Touch or Enum.UserInputType.MouseButton2,
-		Toggle = isMobileDevice -- Force toggle mode on mobile
+		TriggerKey = nil,
+		Toggle = true
 	},
 
 	FOVSettings = {
@@ -283,6 +296,86 @@ getgenv().ExunysDeveloperAimbot = {
 }
 
 local Environment = getgenv().ExunysDeveloperAimbot
+
+local ActivationButton
+
+local function ensureActivationButton()
+	local ui = ensureMobileUI()
+	local button = ui:FindFirstChild("AimbotAimButton")
+
+	if not button then
+		button = Instance.new("TextButton")
+		button.Name = "AimbotAimButton"
+		button.AnchorPoint = Vector2.new(1, 1)
+		button.Position = UDim2.new(1, -36, 1, -110)
+		button.Size = UDim2.fromOffset(72, 72)
+		button.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+		button.BorderSizePixel = 0
+		button.AutoButtonColor = false
+		button.Text = "🎯"
+		button.Font = Enum.Font.GothamBold
+		button.TextSize = 28
+		button.TextColor3 = Color3.new(1, 1, 1)
+		button.ZIndex = 205
+		button.Parent = ui
+
+		local corner = Instance.new("UICorner")
+		corner.CornerRadius = UDim.new(1, 0)
+		corner.Parent = button
+
+		local stroke = Instance.new("UIStroke")
+		stroke.Thickness = 2
+		stroke.Color = Color3.fromRGB(255, 255, 255)
+		stroke.Transparency = 0.25
+		stroke.Parent = button
+
+		if not button:FindFirstChild("Shadow") then
+			local shadow = Instance.new("ImageLabel")
+			shadow.Name = "Shadow"
+			shadow.AnchorPoint = Vector2.new(0.5, 0.5)
+			shadow.Position = UDim2.new(0.5, 0, 0.5, 4)
+			shadow.Size = UDim2.fromOffset(92, 92)
+			shadow.BackgroundTransparency = 1
+			shadow.Image = "rbxassetid://6015897843"
+			shadow.ImageTransparency = 0.7
+			shadow.ScaleType = Enum.ScaleType.Slice
+			shadow.SliceCenter = Rect.new(100, 100, 100, 100)
+			shadow.ZIndex = button.ZIndex - 1
+			shadow.Parent = button
+		end
+	end
+
+	ActivationButton = button
+	return button
+end
+
+local function updateActivationButtonState()
+	if not ActivationButton or not ActivationButton.Parent then
+		return
+	end
+
+	if not Environment.Settings.Enabled then
+		ActivationButton.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
+		ActivationButton.Text = "🚫"
+		return
+	end
+
+	if Running then
+		ActivationButton.BackgroundColor3 = Color3.fromRGB(0, 170, 80)
+		ActivationButton.Text = "🔒"
+	else
+		ActivationButton.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+		ActivationButton.Text = "🎯"
+	end
+end
+
+ensureActivationButton()
+updateActivationButtonState()
+Environment.ActivationButton = ActivationButton
+Environment.MobileUI = sharedMobileGui
+
+setrenderproperty(Environment.FOVCircle, "Visible", false)
+setrenderproperty(Environment.FOVCircleOutline, "Visible", false)
 
 --// Core Functions
 
@@ -316,11 +409,15 @@ local CancelLock = function()
 	local FOVCircle = Environment.FOVCircle--Degrade and Environment.FOVCircle or Environment.FOVCircle.__OBJECT
 
 	setrenderproperty(FOVCircle, "Color", Environment.FOVSettings.Color)
-	__newindex(UserInputService, "MouseDeltaSensitivity", OriginalSensitivity)
+	if OriginalSensitivity then
+		__newindex(UserInputService, "MouseDeltaSensitivity", OriginalSensitivity)
+	end
 
 	if Animation then
 		Animation:Cancel()
 	end
+
+	updateActivationButtonState()
 end
 
 local GetClosestPlayer = function()
@@ -366,183 +463,18 @@ local GetClosestPlayer = function()
 				end
 			end
 		end
-	else
-		-- Keep locked target until it becomes invalid (dead, behind wall, or character missing)
-		local LockedCharacter = __index(Environment.Locked, "Character")
-		local LockedHumanoid = LockedCharacter and FindFirstChildOfClass(LockedCharacter, "Humanoid")
-		local LockedPart = LockedCharacter and FindFirstChild(LockedCharacter, LockPart)
-		
-		-- Check if target is still valid
-		local shouldUnlock = false
-		
-		if not LockedCharacter or not LockedPart then
-			shouldUnlock = true
-		elseif Settings.AliveCheck and LockedHumanoid and __index(LockedHumanoid, "Health") <= 0 then
-			shouldUnlock = true
-		elseif Settings.WallCheck and LockedPart then
-			local PartPosition = __index(LockedPart, "Position")
-			local BlacklistTable = GetDescendants(__index(LocalPlayer, "Character"))
-			
-			for _, Value in next, GetDescendants(LockedCharacter) do
-				BlacklistTable[#BlacklistTable + 1] = Value
-			end
-			
-			if #GetPartsObscuringTarget(Camera, {PartPosition}, BlacklistTable) > 0 then
-				shouldUnlock = true
-			end
-		end
-		
-		if shouldUnlock then
-			CancelLock()
-		end
+	elseif (GetMouseLocation(UserInputService) - ConvertVector(WorldToViewportPoint(Camera, __index(__index(__index(Environment.Locked, "Character"), LockPart), "Position")))).Magnitude > RequiredDistance then
+		CancelLock()
 	end
-end
-
-local CreateMobileTargetButton = function()
-	if not isMobileDevice then return end
-	
-	-- Create mobile target button
-	local screenGui = Instance.new("ScreenGui")
-	screenGui.Name = "MobileAimbotButton"
-	screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-	screenGui.DisplayOrder = 999998
-	screenGui.ResetOnSpawn = false
-	
-	pcall(function()
-		if gethui then
-			screenGui.Parent = gethui()
-		elseif syn and syn.protect_gui then
-			syn.protect_gui(screenGui)
-			screenGui.Parent = game:GetService("CoreGui")
-		else
-			screenGui.Parent = game:GetService("CoreGui")
-		end
-	end)
-	
-	-- Create circular button
-	local button = Instance.new("TextButton")
-	button.Name = "TargetButton"
-	button.Size = UDim2.fromOffset(65, 65)
-	button.Position = UDim2.new(1, -85, 0.5, -32.5)
-	button.AnchorPoint = Vector2.new(0, 0)
-	button.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-	button.BackgroundTransparency = 0.3
-	button.BorderSizePixel = 0
-	button.Text = "🎯"
-	button.TextSize = 32
-	button.TextColor3 = Color3.fromRGB(255, 255, 255)
-	button.Font = Enum.Font.GothamBold
-	button.Parent = screenGui
-	
-	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(1, 0)
-	corner.Parent = button
-	
-	local stroke = Instance.new("UIStroke")
-	stroke.Thickness = 2
-	stroke.Color = Color3.fromRGB(255, 100, 100)
-	stroke.Transparency = 0.5
-	stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-	stroke.Parent = button
-	
-	-- Status indicator
-	local statusLabel = Instance.new("TextLabel")
-	statusLabel.Name = "Status"
-	statusLabel.Size = UDim2.new(1, 0, 0, 15)
-	statusLabel.Position = UDim2.new(0, 0, 1, 5)
-	statusLabel.BackgroundTransparency = 1
-	statusLabel.Text = "OFF"
-	statusLabel.TextSize = 10
-	statusLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
-	statusLabel.Font = Enum.Font.GothamBold
-	statusLabel.Parent = button
-	
-	-- Make draggable
-	local dragging = false
-	local dragInput, dragStart, startPos
-	
-	button.InputBegan:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.Touch then
-			dragging = true
-			dragStart = input.Position
-			startPos = button.Position
-			
-			input.Changed:Connect(function()
-				if input.UserInputState == Enum.UserInputState.End then
-					dragging = false
-				end
-			end)
-		end
-	end)
-	
-	button.InputChanged:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.Touch then
-			dragInput = input
-		end
-	end)
-	
-	UserInputService.InputChanged:Connect(function(input)
-		if input == dragInput and dragging then
-			local delta = input.Position - dragStart
-			button.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-		end
-	end)
-	
-	-- Toggle aimbot on tap
-	button.MouseButton1Click:Connect(function()
-		Running = not Running
-		
-		if Running then
-			button.BackgroundColor3 = Color3.fromRGB(100, 255, 100)
-			stroke.Color = Color3.fromRGB(100, 255, 100)
-			statusLabel.Text = "ON"
-			statusLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
-			button.Text = "🔒"
-		else
-			button.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-			stroke.Color = Color3.fromRGB(255, 100, 100)
-			statusLabel.Text = "OFF"
-			statusLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
-			button.Text = "🎯"
-			CancelLock()
-		end
-	end)
-	
-	-- Pulse animation when locked
-	task.spawn(function()
-		while screenGui.Parent do
-			if Environment.Locked then
-				for i = 0.3, 0.7, 0.05 do
-					if button and button.Parent then
-						button.BackgroundTransparency = i
-						task.wait(0.05)
-					end
-				end
-				for i = 0.7, 0.3, -0.05 do
-					if button and button.Parent then
-						button.BackgroundTransparency = i
-						task.wait(0.05)
-					end
-				end
-			else
-				task.wait(0.1)
-			end
-		end
-	end)
-	
-	MobileTargetButton = screenGui
-	return screenGui
 end
 
 local Load = function()
+	Running = false
+	updateActivationButtonState()
 	OriginalSensitivity = __index(UserInputService, "MouseDeltaSensitivity")
 
 	local Settings, FOVCircle, FOVCircleOutline, FOVSettings, Offset = Environment.Settings, Environment.FOVCircle, Environment.FOVCircleOutline, Environment.FOVSettings
-	
-	-- Create mobile button if on mobile device
-	if isMobileDevice then
-		CreateMobileTargetButton()
-	end
+	local lastEnabledState = Settings.Enabled
 
 	--[[
 	if not Degrade then
@@ -553,6 +485,21 @@ local Load = function()
 	ServiceConnections.RenderSteppedConnection = Connect(__index(RunService, Environment.DeveloperSettings.UpdateMode), function()
 		pcall(function()
 			local OffsetToMoveDirection, LockPart = Settings.OffsetToMoveDirection, Settings.LockPart
+
+			if Settings.Enabled ~= lastEnabledState then
+				lastEnabledState = Settings.Enabled
+				if not Settings.Enabled then
+					Running = false
+					CancelLock()
+				else
+					updateActivationButtonState()
+				end
+			else
+				if not Settings.Enabled and Running then
+					Running = false
+					CancelLock()
+				end
+			end
 
 			if FOVSettings.Enabled and Settings.Enabled then
 			for Index, Value in next, FOVSettings do
@@ -617,16 +564,13 @@ local Load = function()
 						mousemoverel((LockedPosition.X - GetMouseLocation(UserInputService).X) / Settings.Sensitivity2, (LockedPosition.Y - GetMouseLocation(UserInputService).Y) / Settings.Sensitivity2)
 					end
 				else
-					-- Smooth tracking using Sensitivity slider value
-					local currentCFrame = Camera.CFrame
-					local targetCFrame = CFramenew(currentCFrame.Position, LockedPosition_Vector3 + Offset)
-					
-					-- Calculate lerp alpha based on Sensitivity slider (higher sensitivity = faster tracking)
-					-- Sensitivity of 0 = instant lock, Sensitivity > 0 = smooth over time
-					local lerpAlpha = Settings.Sensitivity > 0 and (1 / (Settings.Sensitivity * 60)) or 1
-					lerpAlpha = mathclamp(lerpAlpha, 0.05, 1) -- Clamp between 5% and 100%
-					
-					__newindex(Camera, "CFrame", currentCFrame:Lerp(targetCFrame, lerpAlpha))
+					if Settings.Sensitivity > 0 then
+						Animation = TweenService:Create(Camera, TweenInfonew(Environment.Settings.Sensitivity, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), {CFrame = CFramenew(Camera.CFrame.Position, LockedPosition_Vector3)})
+						Animation:Play()
+					else
+						__newindex(Camera, "CFrame", CFramenew(Camera.CFrame.Position, LockedPosition_Vector3 + Offset))
+					end
+
 					__newindex(UserInputService, "MouseDeltaSensitivity", 0)
 				end
 
@@ -643,24 +587,17 @@ local Load = function()
 			return
 		end
 
-		-- Support both keyboard keys and mouse/touch input
-		local isKeyboardTrigger = Input.UserInputType == Enum.UserInputType.Keyboard and Input.KeyCode == TriggerKey
-		local isInputTypeTrigger = Input.UserInputType == TriggerKey
-		
-		-- For mobile: Skip if using the mobile button (it handles toggle itself)
-		if isMobileDevice and MobileTargetButton then
-			return
-		end
-		
-		if isKeyboardTrigger or isInputTypeTrigger then
+		if Input.UserInputType == Enum.UserInputType.Keyboard and Input.KeyCode == TriggerKey or Input.UserInputType == TriggerKey then
 			if Toggle then
 				Running = not Running
+				updateActivationButtonState()
 
 				if not Running then
 					CancelLock()
 				end
 			else
 				Running = true
+				updateActivationButtonState()
 			end
 		end
 	end)
@@ -672,18 +609,31 @@ local Load = function()
 			return
 		end
 
-		-- Support both keyboard keys and mouse/touch input
-		local isKeyboardTrigger = Input.UserInputType == Enum.UserInputType.Keyboard and Input.KeyCode == TriggerKey
-		local isInputTypeTrigger = Input.UserInputType == TriggerKey
-		
-		-- For mobile: Skip if using the mobile button
-		if isMobileDevice and MobileTargetButton then
-			return
-		end
-		
-		if isKeyboardTrigger or isInputTypeTrigger then
+		if Input.UserInputType == Enum.UserInputType.Keyboard and Input.KeyCode == TriggerKey or Input.UserInputType == TriggerKey then
 			Running = false
 			CancelLock()
+		end
+	end)
+
+	local button = ensureActivationButton()
+	updateActivationButtonState()
+
+	if ServiceConnections.ButtonConnection then
+		ServiceConnections.ButtonConnection:Disconnect()
+	end
+
+	ServiceConnections.ButtonConnection = button.Activated:Connect(function()
+		if not Settings.Enabled then
+			Running = false
+			updateActivationButtonState()
+			return
+		end
+
+		Running = not Running
+		if not Running then
+			CancelLock()
+		else
+			updateActivationButtonState()
 		end
 	end)
 end
@@ -707,17 +657,37 @@ function Environment.Exit(self) -- METHOD | ExunysDeveloperAimbot:Exit(<void>)
 		Disconnect(ServiceConnections[Index])
 	end
 
+	if ServiceConnections.ButtonConnection then
+		ServiceConnections.ButtonConnection:Disconnect()
+		ServiceConnections.ButtonConnection = nil
+	end
+
+	Running = false
+	updateActivationButtonState()
+	CancelLock()
+
 	Load = nil; ConvertVector = nil; CancelLock = nil; GetClosestPlayer = nil; GetRainbowColor = nil; FixUsername = nil
 
 	self.FOVCircle:Remove()
 	self.FOVCircleOutline:Remove()
-	
-	-- Clean up mobile button
-	if MobileTargetButton then
-		MobileTargetButton:Destroy()
-		MobileTargetButton = nil
+
+	if ActivationButton and ActivationButton.Parent then
+		ActivationButton:Destroy()
 	end
-	
+
+	ActivationButton = nil
+	Environment.ActivationButton = nil
+
+	if sharedMobileGui and sharedMobileGui.Parent then
+		sharedMobileGui:Destroy()
+	end
+
+	sharedMobileGui = nil
+
+	for index in next, ServiceConnections do
+		ServiceConnections[index] = nil
+	end
+
 	getgenv().ExunysDeveloperAimbot = nil
 end
 
