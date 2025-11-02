@@ -30,13 +30,14 @@ local function CreateMobileDrawing(drawingType)
 		local function InitializeGUI()
 			if circleObject._initialized then return end
 			
-			pcall(function()
+			local success = pcall(function()
 				local screenGui = Instance.new("ScreenGui")
 				screenGui.Name = "MobileFOVCircle_" .. math.random(1000, 9999)
 				screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 				screenGui.DisplayOrder = 999999
 				screenGui.IgnoreGuiInset = true
 				screenGui.ResetOnSpawn = false
+				screenGui.Enabled = true
 				
 				if gethui then
 					screenGui.Parent = gethui()
@@ -95,7 +96,8 @@ local function CreateMobileDrawing(drawingType)
 				pcall(function()
 					if key == "Visible" then
 						self._visible = value
-						if value and not self._initialized then
+						-- Always initialize on first property set
+						if not self._initialized then
 							InitializeGUI()
 						end
 						if self._screenGui then
@@ -103,6 +105,10 @@ local function CreateMobileDrawing(drawingType)
 						end
 					elseif key == "Radius" then
 						self._radius = value
+						-- Initialize if not done yet
+						if not self._initialized then
+							InitializeGUI()
+						end
 						if self._frame then
 							self._frame.Size = UDim2.fromOffset(value * 2, value * 2)
 						end
@@ -276,8 +282,15 @@ getgenv().ExunysDeveloperAimbot = {
 
 local Environment = getgenv().ExunysDeveloperAimbot
 
-setrenderproperty(Environment.FOVCircle, "Visible", false)
-setrenderproperty(Environment.FOVCircleOutline, "Visible", false)
+-- Initialize FOV circles immediately for mobile
+pcall(function()
+	setrenderproperty(Environment.FOVCircle, "Visible", true)
+	setrenderproperty(Environment.FOVCircle, "Radius", 90)
+	setrenderproperty(Environment.FOVCircle, "Transparency", 1)
+	setrenderproperty(Environment.FOVCircleOutline, "Visible", true)
+	setrenderproperty(Environment.FOVCircleOutline, "Radius", 90)
+	setrenderproperty(Environment.FOVCircleOutline, "Transparency", 1)
+end)
 
 --// Core Functions
 
@@ -585,23 +598,12 @@ local Load = function()
 						mousemoverel((LockedPosition.X - GetMouseLocation(UserInputService).X) / Settings.Sensitivity2, (LockedPosition.Y - GetMouseLocation(UserInputService).Y) / Settings.Sensitivity2)
 					end
 				else
-					-- Improved smoothing for mobile
-					if Settings.Sensitivity > 0 then
-						-- Use Exponential easing for smoother mobile experience
-						local tweenInfo = TweenInfonew(
-							Settings.Sensitivity,
-							Enum.EasingStyle.Exponential,
-							Enum.EasingDirection.Out
-						)
-						Animation = TweenService:Create(Camera, tweenInfo, {CFrame = CFramenew(Camera.CFrame.Position, LockedPosition_Vector3 + Offset)})
-						Animation:Play()
-					else
-						-- Lerp for instant lock with slight smoothing
-						local currentCFrame = Camera.CFrame
-						local targetCFrame = CFramenew(currentCFrame.Position, LockedPosition_Vector3 + Offset)
-						__newindex(Camera, "CFrame", currentCFrame:Lerp(targetCFrame, 0.5))
-					end
-
+					-- Smooth constant lock for mobile (no tweening/animation)
+					local currentCFrame = Camera.CFrame
+					local targetCFrame = CFramenew(currentCFrame.Position, LockedPosition_Vector3 + Offset)
+					
+					-- Use Lerp with 0.2 factor for smooth continuous tracking
+					__newindex(Camera, "CFrame", currentCFrame:Lerp(targetCFrame, 0.2))
 					__newindex(UserInputService, "MouseDeltaSensitivity", 0)
 				end
 
