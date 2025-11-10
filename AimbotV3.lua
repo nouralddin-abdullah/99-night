@@ -124,8 +124,9 @@ getgenv().ExunysDeveloperAimbot = {
 
 	TriggerbotSettings = {
 		Enabled = false,
-		UseSpecificPart = true, -- If true, only shoots when LockPart is in crosshair. If false, shoots when any part is hit
+		UseSpecificPart = true, -- If true, only shoots when SpecificPart is in crosshair. If false, shoots when any main part from DamageableParts is hit
 		SpecificPart = "Head", -- Part to target (only used if UseSpecificPart is true)
+		DamageableParts = {"Head", "UpperTorso", "LowerTorso", "HumanoidRootPart", "LeftUpperArm", "LeftLowerArm", "LeftHand", "RightUpperArm", "RightLowerArm", "RightHand", "LeftUpperLeg", "LeftLowerLeg", "LeftFoot", "RightUpperLeg", "RightLowerLeg", "RightFoot"}, -- Parts to check when UseSpecificPart is false
 		TeamCheck = false,
 		AliveCheck = true,
 		WallCheck = false,
@@ -211,14 +212,7 @@ local CheckTriggerbotTarget = function()
 		return false
 	end
 	
-	print("[TRIGGERBOT DEBUG] Checking for targets...")
-	print(string.format("[TRIGGERBOT DEBUG] Settings - UseSpecificPart: %s, Part: %s, FOVRadius: %d, MaxDist: %d", 
-		tostring(TBSettings.UseSpecificPart), 
-		tostring(TBSettings.SpecificPart), 
-		TBSettings.FOVRadius, 
-		TBSettings.MaxDistance))
-	
-	-- Check if triggerbot key is required and held (FIXED: properly check for key being held)
+	-- Check if triggerbot key is required and held
 	if TBSettings.TriggerKey then
 		local KeyHeld = false
 		pcall(function()
@@ -230,7 +224,6 @@ local CheckTriggerbotTarget = function()
 		end)
 		
 		if not KeyHeld then
-			print("[TRIGGERBOT DEBUG] Key not held, skipping")
 			return false
 		end
 	end
@@ -242,22 +235,16 @@ local CheckTriggerbotTarget = function()
 	
 	local ScreenCenter = Camera.ViewportSize / 2
 	local FOVRadius = TBSettings.FOVRadius
-	print(string.format("[TRIGGERBOT DEBUG] Screen center: %.1f, %.1f | FOV Radius: %d", ScreenCenter.X, ScreenCenter.Y, FOVRadius))
 	
-	local playersChecked = 0
 	for _, Player in next, GetPlayers(Players) do
 		if Player == LocalPlayer then
 			continue
 		end
 		
-		playersChecked = playersChecked + 1
 		local Character = __index(Player, "Character")
 		if not Character then
-			print(string.format("[TRIGGERBOT DEBUG] Player %s - No character", Player.Name))
 			continue
 		end
-		
-		print(string.format("[TRIGGERBOT DEBUG] Checking player: %s", Player.Name))
 		
 		-- Team check
 		if TBSettings.TeamCheck then
@@ -315,13 +302,13 @@ local CheckTriggerbotTarget = function()
 				return true, Player, TargetPart
 			end
 		else
-			-- Check any part of character
-			local Parts = GetDescendants(Character)
+			-- Check main damageable parts only
 			local ClosestDistance = math.huge
 			local ClosestPart = nil
 			
-			for _, Part in next, Parts do
-				if not Part:IsA("BasePart") then
+			for _, PartName in next, TBSettings.DamageableParts do
+				local Part = FindFirstChild(Character, PartName)
+				if not Part then
 					continue
 				end
 				
@@ -366,37 +353,22 @@ local CheckTriggerbotTarget = function()
 		end
 	end
 	
-	print(string.format("[TRIGGERBOT DEBUG] No targets found. Players checked: %d", playersChecked))
 	return false
 end
 
 local TriggerShot = function()
 	LastShotTime = tick()
 	
-	-- Debug output
-	print("[TRIGGERBOT] Attempting to shoot!")
-	
 	-- Try multiple methods to shoot
-	local shotFired = false
 	pcall(function()
-		-- Method 1: Mouse1Click
 		if mouse1click then
 			mouse1click()
-			shotFired = true
-			print("[TRIGGERBOT] Used mouse1click()")
 		elseif mouse1press and mouse1release then
-			-- Method 2: Mouse1Press/Release
 			mouse1press()
 			task.wait(0.05)
 			mouse1release()
-			shotFired = true
-			print("[TRIGGERBOT] Used mouse1press/release()")
 		end
 	end)
-	
-	if not shotFired then
-		print("[TRIGGERBOT] WARNING: No shooting method available!")
-	end
 end
 
 local GetClosestPlayer = function()
@@ -451,9 +423,6 @@ local Load = function()
 	OriginalSensitivity = __index(UserInputService, "MouseDeltaSensitivity")
 
 	local Settings, FOVCircle, FOVCircleOutline, FOVSettings, Offset = Environment.Settings, Environment.FOVCircle, Environment.FOVCircleOutline, Environment.FOVSettings
-
-	print("[TRIGGERBOT] Aimbot system loaded!")
-	print(string.format("[TRIGGERBOT] Triggerbot Enabled: %s", tostring(Environment.TriggerbotSettings.Enabled)))
 
 	--[[
 	if not Degrade then
@@ -546,10 +515,6 @@ local Load = function()
 		if Environment.TriggerbotSettings.Enabled then
 			local ShouldShoot, TargetPlayer, TargetPart = CheckTriggerbotTarget()
 			if ShouldShoot then
-				-- Debug: Show what we're shooting at
-				if TargetPlayer then
-					print(string.format("[TRIGGERBOT] Target detected: %s (%s)", tostring(TargetPlayer.Name), tostring(TargetPart and TargetPart.Name or "unknown")))
-				end
 				TriggerShot()
 			end
 		end
