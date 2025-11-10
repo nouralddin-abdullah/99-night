@@ -211,6 +211,13 @@ local CheckTriggerbotTarget = function()
 		return false
 	end
 	
+	print("[TRIGGERBOT DEBUG] Checking for targets...")
+	print(string.format("[TRIGGERBOT DEBUG] Settings - UseSpecificPart: %s, Part: %s, FOVRadius: %d, MaxDist: %d", 
+		tostring(TBSettings.UseSpecificPart), 
+		tostring(TBSettings.SpecificPart), 
+		TBSettings.FOVRadius, 
+		TBSettings.MaxDistance))
+	
 	-- Check if triggerbot key is required and held (FIXED: properly check for key being held)
 	if TBSettings.TriggerKey then
 		local KeyHeld = false
@@ -223,6 +230,7 @@ local CheckTriggerbotTarget = function()
 		end)
 		
 		if not KeyHeld then
+			print("[TRIGGERBOT DEBUG] Key not held, skipping")
 			return false
 		end
 	end
@@ -234,16 +242,22 @@ local CheckTriggerbotTarget = function()
 	
 	local ScreenCenter = Camera.ViewportSize / 2
 	local FOVRadius = TBSettings.FOVRadius
+	print(string.format("[TRIGGERBOT DEBUG] Screen center: %.1f, %.1f | FOV Radius: %d", ScreenCenter.X, ScreenCenter.Y, FOVRadius))
 	
+	local playersChecked = 0
 	for _, Player in next, GetPlayers(Players) do
 		if Player == LocalPlayer then
 			continue
 		end
 		
+		playersChecked = playersChecked + 1
 		local Character = __index(Player, "Character")
 		if not Character then
+			print(string.format("[TRIGGERBOT DEBUG] Player %s - No character", Player.Name))
 			continue
 		end
+		
+		print(string.format("[TRIGGERBOT DEBUG] Checking player: %s", Player.Name))
 		
 		-- Team check
 		if TBSettings.TeamCheck then
@@ -352,6 +366,7 @@ local CheckTriggerbotTarget = function()
 		end
 	end
 	
+	print(string.format("[TRIGGERBOT DEBUG] No targets found. Players checked: %d", playersChecked))
 	return false
 end
 
@@ -436,6 +451,9 @@ local Load = function()
 	OriginalSensitivity = __index(UserInputService, "MouseDeltaSensitivity")
 
 	local Settings, FOVCircle, FOVCircleOutline, FOVSettings, Offset = Environment.Settings, Environment.FOVCircle, Environment.FOVCircleOutline, Environment.FOVSettings
+
+	print("[TRIGGERBOT] Aimbot system loaded!")
+	print(string.format("[TRIGGERBOT] Triggerbot Enabled: %s", tostring(Environment.TriggerbotSettings.Enabled)))
 
 	--[[
 	if not Degrade then
