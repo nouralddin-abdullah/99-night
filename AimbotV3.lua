@@ -211,9 +211,20 @@ local CheckTriggerbotTarget = function()
 		return false
 	end
 	
-	-- Check if triggerbot key is required and held
-	if TBSettings.TriggerKey and not UserInputService:IsKeyDown(TBSettings.TriggerKey) and not UserInputService:IsMouseButtonPressed(TBSettings.TriggerKey) then
-		return false
+	-- Check if triggerbot key is required and held (FIXED: properly check for key being held)
+	if TBSettings.TriggerKey then
+		local KeyHeld = false
+		pcall(function()
+			if TBSettings.TriggerKey.EnumType == Enum.KeyCode then
+				KeyHeld = UserInputService:IsKeyDown(TBSettings.TriggerKey)
+			elseif TBSettings.TriggerKey.EnumType == Enum.UserInputType then
+				KeyHeld = UserInputService:IsMouseButtonPressed(TBSettings.TriggerKey)
+			end
+		end)
+		
+		if not KeyHeld then
+			return false
+		end
 	end
 	
 	-- Check shot delay
@@ -347,18 +358,30 @@ end
 local TriggerShot = function()
 	LastShotTime = tick()
 	
+	-- Debug output
+	print("[TRIGGERBOT] Attempting to shoot!")
+	
 	-- Try multiple methods to shoot
+	local shotFired = false
 	pcall(function()
 		-- Method 1: Mouse1Click
 		if mouse1click then
 			mouse1click()
+			shotFired = true
+			print("[TRIGGERBOT] Used mouse1click()")
 		elseif mouse1press and mouse1release then
 			-- Method 2: Mouse1Press/Release
 			mouse1press()
 			task.wait(0.05)
 			mouse1release()
+			shotFired = true
+			print("[TRIGGERBOT] Used mouse1press/release()")
 		end
 	end)
+	
+	if not shotFired then
+		print("[TRIGGERBOT] WARNING: No shooting method available!")
+	end
 end
 
 local GetClosestPlayer = function()
@@ -505,6 +528,10 @@ local Load = function()
 		if Environment.TriggerbotSettings.Enabled then
 			local ShouldShoot, TargetPlayer, TargetPart = CheckTriggerbotTarget()
 			if ShouldShoot then
+				-- Debug: Show what we're shooting at
+				if TargetPlayer then
+					print(string.format("[TRIGGERBOT] Target detected: %s (%s)", tostring(TargetPlayer.Name), tostring(TargetPart and TargetPart.Name or "unknown")))
+				end
 				TriggerShot()
 			end
 		end
