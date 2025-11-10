@@ -131,7 +131,7 @@ getgenv().ExunysDeveloperAimbot = {
 		AliveCheck = true,
 		WallCheck = false,
 		MaxDistance = 500, -- Maximum distance to trigger shot
-		FOVRadius = 10, -- Crosshair FOV radius in pixels
+		FOVRadius = 1, -- Crosshair FOV radius in pixels (minimum 1)
 		DelayBetweenShots = 0.1, -- Delay between automatic shots
 		TriggerKey = nil -- Optional: Require holding a key to enable triggerbot (nil = always active when enabled)
 	},
@@ -206,7 +206,7 @@ end
 local LastShotTime = 0
 local TriggerbotCache = {
 	LastCheck = 0,
-	CheckInterval = 0.033, -- Check every ~30ms instead of every frame (still very fast)
+	CheckInterval = 0.01, -- Check every ~10ms for better responsiveness
 	LastResult = false
 }
 
