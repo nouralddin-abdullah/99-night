@@ -204,6 +204,11 @@ local CancelLock = function()
 end
 
 local LastShotTime = 0
+local TriggerbotCache = {
+	LastCheck = 0,
+	CheckInterval = 0.033, -- Check every ~30ms instead of every frame (still very fast)
+	LastResult = false
+}
 
 local CheckTriggerbotTarget = function()
 	local TBSettings = Environment.TriggerbotSettings
@@ -211,6 +216,13 @@ local CheckTriggerbotTarget = function()
 	if not TBSettings.Enabled then
 		return false
 	end
+	
+	-- Throttle checks to reduce CPU usage
+	local now = tick()
+	if now - TriggerbotCache.LastCheck < TriggerbotCache.CheckInterval then
+		return TriggerbotCache.LastResult
+	end
+	TriggerbotCache.LastCheck = now
 	
 	-- Check if triggerbot key is required and held
 	if TBSettings.TriggerKey then
@@ -224,17 +236,20 @@ local CheckTriggerbotTarget = function()
 		end)
 		
 		if not KeyHeld then
+			TriggerbotCache.LastResult = false
 			return false
 		end
 	end
 	
 	-- Check shot delay
-	if tick() - LastShotTime < TBSettings.DelayBetweenShots then
+	if now - LastShotTime < TBSettings.DelayBetweenShots then
+		TriggerbotCache.LastResult = false
 		return false
 	end
 	
 	local ScreenCenter = Camera.ViewportSize / 2
 	local FOVRadius = TBSettings.FOVRadius
+	local MaxDistance = TBSettings.MaxDistance
 	
 	for _, Player in next, GetPlayers(Players) do
 		if Player == LocalPlayer then
@@ -244,6 +259,15 @@ local CheckTriggerbotTarget = function()
 		local Character = __index(Player, "Character")
 		if not Character then
 			continue
+		end
+		
+		-- Quick distance check first (cheapest check)
+		local HRP = FindFirstChild(Character, "HumanoidRootPart")
+		if HRP then
+			local QuickDist = (Camera.CFrame.Position - __index(HRP, "Position")).Magnitude
+			if QuickDist > MaxDistance then
+				continue -- Skip this player entirely if too far
+			end
 		end
 		
 		-- Team check
@@ -276,13 +300,15 @@ local CheckTriggerbotTarget = function()
 				continue
 			end
 			
-			-- Distance check
-			local Distance = (Camera.CFrame.Position - PartPosition).Magnitude
-			if Distance > TBSettings.MaxDistance then
-				continue
+			-- FOV check early (before expensive distance calc)
+			local ScreenVector = Vector2new(ScreenPos.X, ScreenPos.Y)
+			local DistanceFromCenter = (ScreenCenter - ScreenVector).Magnitude
+			
+			if DistanceFromCenter > FOVRadius then
+				continue -- Not in crosshair FOV
 			end
 			
-			-- Wall check
+			-- Wall check (only if needed)
 			if TBSettings.WallCheck then
 				local BlacklistTable = GetDescendants(__index(LocalPlayer, "Character"))
 				for _, Value in next, GetDescendants(Character) do
@@ -294,17 +320,21 @@ local CheckTriggerbotTarget = function()
 				end
 			end
 			
-			-- FOV check
-			local ScreenVector = Vector2new(ScreenPos.X, ScreenPos.Y)
-			local DistanceFromCenter = (ScreenCenter - ScreenVector).Magnitude
-			
-			if DistanceFromCenter <= FOVRadius then
-				return true, Player, TargetPart
-			end
+			TriggerbotCache.LastResult = true
+			return true, Player, TargetPart
 		else
-			-- Check main damageable parts only
+			-- Check main damageable parts only (optimized)
 			local ClosestDistance = math.huge
 			local ClosestPart = nil
+			
+			-- Pre-build blacklist once if needed
+			local BlacklistTable = nil
+			if TBSettings.WallCheck then
+				BlacklistTable = GetDescendants(__index(LocalPlayer, "Character"))
+				for _, Value in next, GetDescendants(Character) do
+					BlacklistTable[#BlacklistTable + 1] = Value
+				end
+			end
 			
 			for _, PartName in next, TBSettings.DamageableParts do
 				local Part = FindFirstChild(Character, PartName)
@@ -319,40 +349,34 @@ local CheckTriggerbotTarget = function()
 					continue
 				end
 				
-				-- Distance check
-				local Distance = (Camera.CFrame.Position - PartPosition).Magnitude
-				if Distance > TBSettings.MaxDistance then
-					continue
+				-- FOV check first (cheapest)
+				local ScreenVector = Vector2new(ScreenPos.X, ScreenPos.Y)
+				local DistanceFromCenter = (ScreenCenter - ScreenVector).Magnitude
+				
+				if DistanceFromCenter > FOVRadius or DistanceFromCenter >= ClosestDistance then
+					continue -- Not in FOV or not closer than current closest
 				end
 				
-				-- Wall check
+				-- Wall check (only if needed and passed FOV)
 				if TBSettings.WallCheck then
-					local BlacklistTable = GetDescendants(__index(LocalPlayer, "Character"))
-					for _, Value in next, GetDescendants(Character) do
-						BlacklistTable[#BlacklistTable + 1] = Value
-					end
-					
 					if #GetPartsObscuringTarget(Camera, {PartPosition}, BlacklistTable) > 0 then
 						continue
 					end
 				end
 				
-				-- FOV check
-				local ScreenVector = Vector2new(ScreenPos.X, ScreenPos.Y)
-				local DistanceFromCenter = (ScreenCenter - ScreenVector).Magnitude
-				
-				if DistanceFromCenter <= FOVRadius and DistanceFromCenter < ClosestDistance then
-					ClosestDistance = DistanceFromCenter
-					ClosestPart = Part
-				end
+				-- This part is closest so far
+				ClosestDistance = DistanceFromCenter
+				ClosestPart = Part
 			end
 			
 			if ClosestPart then
+				TriggerbotCache.LastResult = true
 				return true, Player, ClosestPart
 			end
 		end
 	end
 	
+	TriggerbotCache.LastResult = false
 	return false
 end
 
