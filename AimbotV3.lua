@@ -122,6 +122,19 @@ getgenv().ExunysDeveloperAimbot = {
 		Toggle = false
 	},
 
+	TriggerbotSettings = {
+		Enabled = false,
+		UseSpecificPart = true, -- If true, only shoots when LockPart is in crosshair. If false, shoots when any part is hit
+		SpecificPart = "Head", -- Part to target (only used if UseSpecificPart is true)
+		TeamCheck = false,
+		AliveCheck = true,
+		WallCheck = false,
+		MaxDistance = 500, -- Maximum distance to trigger shot
+		FOVRadius = 10, -- Crosshair FOV radius in pixels
+		DelayBetweenShots = 0.1, -- Delay between automatic shots
+		TriggerKey = nil -- Optional: Require holding a key to enable triggerbot (nil = always active when enabled)
+	},
+
 	FOVSettings = {
 		Enabled = true,
 		Visible = true,
@@ -187,6 +200,165 @@ local CancelLock = function()
 	if Animation then
 		Animation:Cancel()
 	end
+end
+
+local LastShotTime = 0
+
+local CheckTriggerbotTarget = function()
+	local TBSettings = Environment.TriggerbotSettings
+	
+	if not TBSettings.Enabled then
+		return false
+	end
+	
+	-- Check if triggerbot key is required and held
+	if TBSettings.TriggerKey and not UserInputService:IsKeyDown(TBSettings.TriggerKey) and not UserInputService:IsMouseButtonPressed(TBSettings.TriggerKey) then
+		return false
+	end
+	
+	-- Check shot delay
+	if tick() - LastShotTime < TBSettings.DelayBetweenShots then
+		return false
+	end
+	
+	local ScreenCenter = Camera.ViewportSize / 2
+	local FOVRadius = TBSettings.FOVRadius
+	
+	for _, Player in next, GetPlayers(Players) do
+		if Player == LocalPlayer then
+			continue
+		end
+		
+		local Character = __index(Player, "Character")
+		if not Character then
+			continue
+		end
+		
+		-- Team check
+		if TBSettings.TeamCheck then
+			local TeamCheckOption = Environment.DeveloperSettings.TeamCheckOption
+			if __index(Player, TeamCheckOption) == __index(LocalPlayer, TeamCheckOption) then
+				continue
+			end
+		end
+		
+		-- Alive check
+		if TBSettings.AliveCheck then
+			local Humanoid = FindFirstChildOfClass(Character, "Humanoid")
+			if not Humanoid or __index(Humanoid, "Health") <= 0 then
+				continue
+			end
+		end
+		
+		if TBSettings.UseSpecificPart then
+			-- Check specific part only
+			local TargetPart = FindFirstChild(Character, TBSettings.SpecificPart or "Head")
+			if not TargetPart then
+				continue
+			end
+			
+			local PartPosition = __index(TargetPart, "Position")
+			local ScreenPos, OnScreen = WorldToViewportPoint(Camera, PartPosition)
+			
+			if not OnScreen then
+				continue
+			end
+			
+			-- Distance check
+			local Distance = (Camera.CFrame.Position - PartPosition).Magnitude
+			if Distance > TBSettings.MaxDistance then
+				continue
+			end
+			
+			-- Wall check
+			if TBSettings.WallCheck then
+				local BlacklistTable = GetDescendants(__index(LocalPlayer, "Character"))
+				for _, Value in next, GetDescendants(Character) do
+					BlacklistTable[#BlacklistTable + 1] = Value
+				end
+				
+				if #GetPartsObscuringTarget(Camera, {PartPosition}, BlacklistTable) > 0 then
+					continue
+				end
+			end
+			
+			-- FOV check
+			local ScreenVector = Vector2new(ScreenPos.X, ScreenPos.Y)
+			local DistanceFromCenter = (ScreenCenter - ScreenVector).Magnitude
+			
+			if DistanceFromCenter <= FOVRadius then
+				return true, Player, TargetPart
+			end
+		else
+			-- Check any part of character
+			local Parts = GetDescendants(Character)
+			local ClosestDistance = math.huge
+			local ClosestPart = nil
+			
+			for _, Part in next, Parts do
+				if not Part:IsA("BasePart") then
+					continue
+				end
+				
+				local PartPosition = __index(Part, "Position")
+				local ScreenPos, OnScreen = WorldToViewportPoint(Camera, PartPosition)
+				
+				if not OnScreen then
+					continue
+				end
+				
+				-- Distance check
+				local Distance = (Camera.CFrame.Position - PartPosition).Magnitude
+				if Distance > TBSettings.MaxDistance then
+					continue
+				end
+				
+				-- Wall check
+				if TBSettings.WallCheck then
+					local BlacklistTable = GetDescendants(__index(LocalPlayer, "Character"))
+					for _, Value in next, GetDescendants(Character) do
+						BlacklistTable[#BlacklistTable + 1] = Value
+					end
+					
+					if #GetPartsObscuringTarget(Camera, {PartPosition}, BlacklistTable) > 0 then
+						continue
+					end
+				end
+				
+				-- FOV check
+				local ScreenVector = Vector2new(ScreenPos.X, ScreenPos.Y)
+				local DistanceFromCenter = (ScreenCenter - ScreenVector).Magnitude
+				
+				if DistanceFromCenter <= FOVRadius and DistanceFromCenter < ClosestDistance then
+					ClosestDistance = DistanceFromCenter
+					ClosestPart = Part
+				end
+			end
+			
+			if ClosestPart then
+				return true, Player, ClosestPart
+			end
+		end
+	end
+	
+	return false
+end
+
+local TriggerShot = function()
+	LastShotTime = tick()
+	
+	-- Try multiple methods to shoot
+	pcall(function()
+		-- Method 1: Mouse1Click
+		if mouse1click then
+			mouse1click()
+		elseif mouse1press and mouse1release then
+			-- Method 2: Mouse1Press/Release
+			mouse1press()
+			task.wait(0.05)
+			mouse1release()
+		end
+	end)
 end
 
 local GetClosestPlayer = function()
@@ -326,6 +498,14 @@ local Load = function()
 				end
 
 				setrenderproperty(FOVCircle, "Color", FOVSettings.LockedColor)
+			end
+		end
+		
+		-- Triggerbot check (independent of aimbot)
+		if Environment.TriggerbotSettings.Enabled then
+			local ShouldShoot, TargetPlayer, TargetPart = CheckTriggerbotTarget()
+			if ShouldShoot then
+				TriggerShot()
 			end
 		end
 		end)
